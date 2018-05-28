@@ -100,7 +100,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         return linkedWasm
     }
 
-    private fun llvmLinkAndLlc(bitcodeFiles: List<BitcodeFile>): String {
+    private fun llvmLinkAndLlc(bitcodeFiles: List<BitcodeFile>): ObjectFile {
         val combinedBc = temporary("combined", ".bc")
         hostLlvmTool("llvm-link", "-o", combinedBc, *bitcodeFiles.toTypedArray())
 
@@ -113,6 +113,37 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         hostLlvmTool("llc", optimizedBc, "-filetype=obj", "-o", combinedO, *llcFlags.toTypedArray())
 
         return combinedO
+    }
+
+    private fun llvmLink(bitcodeFiles: List<BitcodeFile>): BitcodeFile {
+        val combinedBc = temporary("linked", ".bc")
+        hostLlvmTool("llvm-link", "-o", combinedBc, *bitcodeFiles.toTypedArray())
+        return combinedBc
+    }
+
+    private fun opt(bitcodeFile: BitcodeFile): BitcodeFile {
+        val configurables = platform.configurables as AppleConfigurables
+        val optFlags = (configurables.optFlags + when {
+            optimize    -> configurables.optOptFlags
+            debug       -> configurables.optDebugFlags
+            else        -> configurables.optNooptFlags
+        } + llvmProfilingFlags()).toTypedArray()
+        val optimizedBc = temporary("optimized", ".bc")
+        hostLlvmTool("opt", bitcodeFile, "-o", optimizedBc, *optFlags)
+        return optimizedBc
+    }
+
+    private fun llc(bitcodeFile: BitcodeFile): ObjectFile {
+        val configurables = platform.configurables as AppleConfigurables
+
+        val compiledFile = temporary("compiled", ".o")
+        val llcFlags = (configurables.llcFlags + when {
+            optimize    -> configurables.llcOptFlags
+            debug       -> configurables.llcDebugFlags
+            else        -> configurables.llcNooptFlags
+        } + llvmProfilingFlags()).toTypedArray()
+        hostLlvmTool("llc", bitcodeFile, "-filetype=obj", "-o", compiledFile, *llcFlags)
+        return compiledFile
     }
 
     // llvm-lto, opt and llc share same profiling flags, so we can
@@ -219,7 +250,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
                         is ZephyrConfigurables
                         -> llvmLinkAndLlc(bitcodeFiles)
                         else
-                        -> llvmLto(bitcodeFiles)
+                        -> llc(opt(llvmLink(bitcodeFiles)))
                     }
             )
         }

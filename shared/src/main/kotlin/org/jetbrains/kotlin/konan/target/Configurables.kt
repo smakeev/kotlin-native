@@ -56,6 +56,16 @@ interface AppleConfigurables : Configurables {
     val arch get() = targetString("arch")!!
     val osVersionMin get() = targetString("osVersionMin")!!
     val osVersionMinFlagLd get() = targetString("osVersionMinFlagLd")!!
+
+    val llcFlags get()      = targetList("llcFlags")
+    val llcNooptFlags get() = targetList("llcNooptFlags")
+    val llcOptFlags get()   = targetList("llcOptFlags")
+    val llcDebugFlags get() = targetList("llcDebugFlags")
+
+    val optFlags get()      = targetList("optFlags")
+    val optNooptFlags get() = targetList("optNooptFlags")
+    val optOptFlags get()   = targetList("optOptFlags")
+    val optDebugFlags get() = targetList("optDebugFlags")
 }
 
 interface MingwConfigurables : NonAppleConfigurables
