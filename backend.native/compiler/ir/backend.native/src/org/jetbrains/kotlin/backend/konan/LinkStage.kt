@@ -251,12 +251,13 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         phaser.phase(KonanPhase.OBJECT_FILES) {
             objectFiles.add(
                     when (platform.configurables) {
-                        is WasmConfigurables
-                        -> bitcodeToWasm(bitcodeFiles)
-                        is ZephyrConfigurables
-                        -> llvmLinkAndLlc(bitcodeFiles)
-                        else
-                        -> llc(opt(internalize(llvmLink(bitcodeFiles))))
+                        is WasmConfigurables -> bitcodeToWasm(bitcodeFiles)
+                        is ZephyrConfigurables -> llvmLinkAndLlc(bitcodeFiles)
+                        else -> if (context.shouldUseLlc()) {
+                            llc(opt(llvmLink(bitcodeFiles)))
+                        } else {
+                            llvmLto(bitcodeFiles)
+                        }
                     }
             )
         }
