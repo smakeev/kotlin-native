@@ -115,9 +115,10 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         return combinedO
     }
 
-    private fun llvmLink(bitcodeFiles: List<BitcodeFile>): BitcodeFile {
+    private fun llvmLink(bitcodeFiles: List<BitcodeFile>, onlyNeeded: Boolean = false): BitcodeFile {
         val combinedBc = temporary("linked", ".bc")
-        hostLlvmTool("llvm-link", "-o", combinedBc, *bitcodeFiles.toTypedArray())
+        val flags = if (onlyNeeded) arrayOf("-only-needed") else emptyArray()
+        hostLlvmTool("llvm-link", "-o", combinedBc, *bitcodeFiles.toTypedArray(), *flags)
         return combinedBc
     }
 
@@ -228,12 +229,6 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
             return null
         }
         return executable
-    }
-
-    fun internalize(bitcodeFile: BitcodeFile): BitcodeFile {
-        val optimizedBc = temporary("internalized", ".bc")
-        hostLlvmTool("opt", bitcodeFile, "-o", optimizedBc, "-internalize")
-        return optimizedBc
     }
 
     fun linkStage() {
