@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.konan
 
+import org.jetbrains.kotlin.backend.konan.library.KonanLibraryReader
 import org.jetbrains.kotlin.konan.KonanExternalToolFailure
 import org.jetbrains.kotlin.konan.exec.Command
 import org.jetbrains.kotlin.konan.file.File
@@ -231,6 +232,17 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         return executable
     }
 
+    fun compileWithNewLlvmPipeline(program: BitcodeFile, libraries: List<KonanLibraryReader>): ObjectFile {
+        val runtime = libraries.first { it.libraryName == "stdlib" }.bitcodePaths.first { it.endsWith("runtime.bc") }
+        val stdlib = libraries.first { it.libraryName == "stdlib" }.bitcodePaths.first { it.endsWith("program.kt.bc") }
+        val withoutStdlib =
+        val bitcodeFiles = listOf(program) +
+                libraries.map { it.bitcodePaths }.flatten()
+
+        return llc(opt(llvmLink(bitcodeFiles)))
+    }
+
+
     fun linkStage() {
         val bitcodeFiles = listOf(emitted) +
                 libraries.map { it.bitcodePaths }.flatten().filter { it.isBitcode }
@@ -249,7 +261,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
                         is WasmConfigurables -> bitcodeToWasm(bitcodeFiles)
                         is ZephyrConfigurables -> llvmLinkAndLlc(bitcodeFiles)
                         else -> if (context.shouldUseLlc()) {
-                            llc(opt(llvmLink(bitcodeFiles)))
+                            compileWithNewLlvmPipeline(emitted, libraries)
                         } else {
                             llvmLto(bitcodeFiles)
                         }
