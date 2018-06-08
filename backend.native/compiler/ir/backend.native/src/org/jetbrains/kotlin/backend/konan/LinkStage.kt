@@ -233,13 +233,15 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
     }
 
     fun compileWithNewLlvmPipeline(program: BitcodeFile, libraries: List<KonanLibraryReader>): ObjectFile {
-        val runtime = libraries.first { it.libraryName == "stdlib" }.bitcodePaths.first { it.endsWith("runtime.bc") }
-        val stdlib = libraries.first { it.libraryName == "stdlib" }.bitcodePaths.first { it.endsWith("program.kt.bc") }
-        val withoutStdlib =
-        val bitcodeFiles = listOf(program) +
-                libraries.map { it.bitcodePaths }.flatten()
+        // Little hack to reduce linkage overhead
 
-        return llc(opt(llvmLink(bitcodeFiles)))
+        fun stdlibPredicate(libraryReader: KonanLibraryReader) = libraryReader.uniqueName == "stdlib"
+
+        val runtime = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("runtime.bc") }
+        val stdlib = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("program.kt.bc") }
+        val withoutStdlib = llvmLink(listOf(program, runtime) + libraries.filterNot(::stdlibPredicate).map { it.bitcodePaths }.flatten())
+        val withStdlib = llvmLink(listOf(withoutStdlib, stdlib), onlyNeeded = true)
+        return llc(opt(withStdlib))
     }
 
 
