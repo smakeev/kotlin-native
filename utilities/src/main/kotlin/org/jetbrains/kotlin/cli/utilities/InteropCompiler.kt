@@ -4,9 +4,11 @@
  */
 package org.jetbrains.kotlin.cli.utilities
 
+import org.jetbrains.kotlin.konan.CURRENT
 import org.jetbrains.kotlin.konan.file.File
 import org.jetbrains.kotlin.konan.target.PlatformManager
 import org.jetbrains.kotlin.konan.KonanAbiVersion
+import org.jetbrains.kotlin.konan.KonanVersion
 import org.jetbrains.kotlin.konan.library.*
 import org.jetbrains.kotlin.konan.target.Distribution
 import org.jetbrains.kotlin.native.interop.gen.jvm.interop
@@ -59,7 +61,8 @@ fun invokeInterop(flavor: String, args: Array<String>): Array<String> {
         repos,
         libraries.filter { it.contains(File.separator) },
         target,
-        Distribution()
+        Distribution(),
+        listOf(KonanVersion.CURRENT)
     ).libraryResolver()
     val allLibraries = resolver.resolveWithDependencies(
             libraries.toUnresolvedLibraries, noStdLib = true, noDefaultLibs = noDefaultLibs
