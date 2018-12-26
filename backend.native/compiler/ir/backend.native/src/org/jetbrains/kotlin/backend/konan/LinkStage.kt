@@ -5,11 +5,12 @@
 
 package org.jetbrains.kotlin.backend.konan
 
-import org.jetbrains.kotlin.backend.konan.library.KonanLibraryReader
 import org.jetbrains.kotlin.konan.KonanExternalToolFailure
 import org.jetbrains.kotlin.konan.exec.Command
 import org.jetbrains.kotlin.konan.file.File
 import org.jetbrains.kotlin.konan.file.isBitcode
+import org.jetbrains.kotlin.konan.library.KonanLibrary
+import org.jetbrains.kotlin.konan.library.uniqueName
 import org.jetbrains.kotlin.konan.target.*
 
 typealias BitcodeFile = String
@@ -232,9 +233,9 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         return executable
     }
 
-    private fun compileWithNewLlvmPipeline(program: BitcodeFile, libraries: List<KonanLibraryReader>): ObjectFile {
+    private fun compileWithNewLlvmPipeline(program: BitcodeFile, libraries: List<KonanLibrary>): ObjectFile {
         // Little hack to reduce stdlib linkage overhead
-        fun stdlibPredicate(libraryReader: KonanLibraryReader) = libraryReader.uniqueName == "stdlib"
+        fun stdlibPredicate(libraryReader: KonanLibrary) = libraryReader.uniqueName == "stdlib"
         val runtime = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("runtime.bc") }
         val stdlib = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("program.kt.bc") }
         val withoutStdlib = llvmLink(listOf(program, runtime) + libraries.filterNot(::stdlibPredicate).map { it.bitcodePaths }.flatten())
