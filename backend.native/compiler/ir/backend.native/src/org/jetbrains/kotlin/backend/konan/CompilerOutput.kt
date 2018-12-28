@@ -34,6 +34,10 @@ internal fun produceOutput(context: Context, phaser: PhaseManager) {
             val output = tempFiles.nativeBinaryFileName
             context.bitcodeFileName = output
 
+            val cliTools = LlvmCliTools(context)
+
+            val annotated = cliTools.opt(output, "-insert-gcov-profiling", *cliTools.llvmProfilingFlags().toTypedArray())
+
             val generatedBitcodeFiles = 
                 if (produce == CompilerOutputKind.DYNAMIC || produce == CompilerOutputKind.STATIC) {
                     produceCAdapterBitcode(

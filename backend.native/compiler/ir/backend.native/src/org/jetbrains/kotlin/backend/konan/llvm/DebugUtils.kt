@@ -65,7 +65,6 @@ internal class DebugInfo internal constructor(override val context: Context):Con
     var builder: DIBuilderRef? = null
     var module: DIModuleRef? = null
     var types = mutableMapOf<KotlinType, DITypeOpaqueRef>()
-
     val llvmTypes = mapOf<KotlinType, LLVMTypeRef>(
             context.builtIns.booleanType to LLVMInt8Type()!!,
             context.builtIns.byteType    to LLVMInt8Type()!!,
