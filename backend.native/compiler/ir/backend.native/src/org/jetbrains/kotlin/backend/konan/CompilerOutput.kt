@@ -34,34 +34,6 @@ internal fun produceOutput(context: Context, phaser: PhaseManager) {
             val output = tempFiles.nativeBinaryFileName
             context.bitcodeFileName = output
 
-            val cliTools = LlvmCliTools(context)
-
-            val annotated = cliTools.opt(output, "-insert-gcov-profiling", *cliTools.llvmProfilingFlags().toTypedArray())
-
-            val generatedBitcodeFiles = 
-                if (produce == CompilerOutputKind.DYNAMIC || produce == CompilerOutputKind.STATIC) {
-                    produceCAdapterBitcode(
-                        context.config.clang, 
-                        tempFiles.cAdapterCppName, 
-                        tempFiles.cAdapterBitcodeName)
-                    listOf(tempFiles.cAdapterBitcodeName)
-                } else emptyList()
-
-            val nativeLibraries = 
-                context.config.nativeLibraries +
-                context.config.defaultNativeLibraries + 
-                generatedBitcodeFiles
-
-            phaser.phase(KonanPhase.BITCODE_LINKER) {
-                for (library in nativeLibraries) {
-                    val libraryModule = parseBitcodeFile(library)
-                    val failed = LLVMLinkModules2(llvmModule, libraryModule)
-                    if (failed != 0) {
-                        throw Error("failed to link $library") // TODO: retrieve error message from LLVM.
-                    }
-                }
-            }
-
             LLVMWriteBitcodeToFile(llvmModule, output)
         }
         CompilerOutputKind.LIBRARY -> {

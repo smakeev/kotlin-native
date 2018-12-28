@@ -5,6 +5,8 @@
 
 package org.jetbrains.kotlin.backend.konan
 
+import llvm.LLVMLinkModules2
+import org.jetbrains.kotlin.backend.konan.llvm.parseBitcodeFile
 import org.jetbrains.kotlin.konan.KonanExternalToolFailure
 import org.jetbrains.kotlin.konan.exec.Command
 import org.jetbrains.kotlin.konan.file.File
@@ -166,7 +168,8 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
     private val optimize = context.shouldOptimize()
     private val debug = context.config.debug
     private val linkerOutput = when (context.config.produce) {
-        CompilerOutputKind.DYNAMIC, CompilerOutputKind.FRAMEWORK -> LinkerOutputKind.DYNAMIC_LIBRARY
+        CompilerOutputKind.DYNAMIC,
+        CompilerOutputKind.FRAMEWORK -> LinkerOutputKind.DYNAMIC_LIBRARY
         CompilerOutputKind.STATIC -> LinkerOutputKind.STATIC_LIBRARY
         CompilerOutputKind.PROGRAM -> LinkerOutputKind.EXECUTABLE
         else -> TODO("${context.config.produce} should not reach native linker stage")
@@ -206,7 +209,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
 
     private fun link(objectFiles: List<ObjectFile>,
                      includedBinaries: List<String>,
-                     libraryProvidedLinkerFlags: List<String>): ExecutableFile? {
+                     libraryProvidedLinkerFlags: List<String>): ExecutableFile {
         val frameworkLinkerArgs: List<String>
         val executable: String
 
@@ -243,20 +246,27 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
             }
         } catch (e: KonanExternalToolFailure) {
             context.reportCompilationError("${e.toolName} invocation reported errors")
-            return null
         }
         return executable
     }
 
-    private fun compileWithNewLlvmPipeline(program: BitcodeFile, libraries: List<KonanLibrary>): ObjectFile {
+    private fun compileWithNewLlvmPipeline(program: BitcodeFile, nativeLibs: List<String>, libraries: List<KonanLibrary>): ObjectFile {
         // Little hack to reduce stdlib linkage overhead
-        fun stdlibPredicate(libraryReader: KonanLibrary) = libraryReader.uniqueName == "stdlib"
-        val runtime = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("runtime.bc") }
-        val stdlib = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("program.kt.bc") }
-        val withoutStdlib = cliTools.llvmLink(listOf(program, runtime) + libraries.filterNot(::stdlibPredicate).map { it.bitcodePaths }.flatten())
-        val withStdlib = cliTools.llvmLink(listOf(withoutStdlib, stdlib), onlyNeeded = true)
+        with (cliTools) {
+            val annotated = if (context.shouldGenerateCoverage()) {
+                 opt(program, "-insert-gcov-profiling", *llvmProfilingFlags().toTypedArray())
+            } else {
+                program
+            }
+            fun stdlibPredicate(libraryReader: KonanLibrary) = libraryReader.uniqueName == "stdlib"
+            val withNativeLibs = llvmLink(listOf(annotated) + nativeLibs)
+            val runtime = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("runtime.bc") }
+            val stdlib = libraries.first(::stdlibPredicate).bitcodePaths.first { it.endsWith("program.kt.bc") }
+            val withoutStdlib = llvmLink(listOf(withNativeLibs, runtime) + libraries.filterNot(::stdlibPredicate).map { it.bitcodePaths }.flatten())
+            val withStdlib = llvmLink(listOf(withoutStdlib, stdlib), onlyNeeded = true)
 
-        return cliTools.llc(cliTools.opt(withStdlib))
+            return llc(opt(withStdlib))
+        }
     }
 
 
@@ -272,13 +282,31 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
 
         val objectFiles: MutableList<String> = mutableListOf()
 
+        val config = context.config.configuration
+        val tempFiles = context.config.tempFiles
+        val produce = config.get(KonanConfigKeys.PRODUCE)
+
+        val generatedBitcodeFiles =
+                if (produce == CompilerOutputKind.DYNAMIC || produce == CompilerOutputKind.STATIC) {
+                    produceCAdapterBitcode(
+                            context.config.clang,
+                            tempFiles.cAdapterCppName,
+                            tempFiles.cAdapterBitcodeName)
+                    listOf(tempFiles.cAdapterBitcodeName)
+                } else emptyList()
+
+        val nativeLibraries =
+                context.config.nativeLibraries +
+                        context.config.defaultNativeLibraries +
+                        generatedBitcodeFiles
+
         phaser.phase(KonanPhase.OBJECT_FILES) {
             objectFiles.add(
                     when (platform.configurables) {
                         is WasmConfigurables -> cliTools.bitcodeToWasm(bitcodeFiles)
                         is ZephyrConfigurables -> cliTools.llvmLinkAndLlc(bitcodeFiles)
                         else -> if (context.shouldUseLlc()) {
-                            compileWithNewLlvmPipeline(emitted, libraries)
+                            compileWithNewLlvmPipeline(emitted, nativeLibraries, libraries)
                         } else {
                             cliTools.llvmLto(bitcodeFiles)
                         }

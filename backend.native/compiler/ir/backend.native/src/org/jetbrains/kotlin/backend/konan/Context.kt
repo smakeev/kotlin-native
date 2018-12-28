@@ -445,6 +445,8 @@ internal class Context(config: KonanConfig) : KonanBackendContext(config) {
 
     fun shouldUseLlc() = true // TODO
 
+    fun shouldGenerateCoverage() = config.configuration.getBoolean(KonanConfigKeys.CODE_COVERAGE)
+
     override fun log(message: () -> String) {
         if (phase?.verbose ?: false) {
             println(message())
