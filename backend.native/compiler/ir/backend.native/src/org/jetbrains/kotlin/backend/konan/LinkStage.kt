@@ -131,6 +131,23 @@ internal class LlvmCliTools(val context: Context) {
         return optimizedBc
     }
 
+    fun optFixed(bitcodeFile: BitcodeFile, vararg flags: String): BitcodeFile {
+        val configurables = platform.configurables as AppleConfigurables
+
+        val optFlags = if (flags.isNotEmpty()) {
+            flags
+        } else {
+            (configurables.optFlags + when {
+                optimize    -> configurables.optOptFlags
+                debug       -> configurables.optDebugFlags
+                else        -> configurables.optNooptFlags
+            } + llvmProfilingFlags()).toTypedArray()
+        }
+        val optimizedBc = temporary("optimized", ".bc")
+        hostLlvmTool("fixed-opt", bitcodeFile, "-o", optimizedBc, *optFlags)
+        return optimizedBc
+    }
+
     fun llc(bitcodeFile: BitcodeFile): ObjectFile {
         val configurables = platform.configurables as AppleConfigurables
 
@@ -254,7 +271,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         // Little hack to reduce stdlib linkage overhead
         with (cliTools) {
             val annotated = if (context.shouldGenerateCoverage()) {
-                 opt(program, "-insert-gcov-profiling", *llvmProfilingFlags().toTypedArray())
+                 optFixed(program, "-insert-gcov-profiling", *llvmProfilingFlags().toTypedArray())
             } else {
                 program
             }

@@ -1901,15 +1901,21 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     private fun IrFile.file(): DIFileRef {
         return context.debugInfo.files.getOrPut(this.fileEntry.name) {
             val path = this.fileEntry.name.toFileAndFolder()
-            DICreateCompilationUnit(
-                    builder     = context.debugInfo.builder,
-                    lang        = DWARF.language(context.config),
-                    File        = path.file,
-                    dir         = path.folder,
-                    producer    = DWARF.producer,
+            val cu = DICreateCompilationUnit(
+                    builder = context.debugInfo.builder,
+                    lang = DWARF.language(context.config),
+                    File = path.file,
+                    dir = path.folder,
+                    producer = DWARF.producer,
                     isOptimized = 0,
-                    flags       = "",
-                    rv          = DWARF.runtimeVersion(context.config))
+                    flags = "",
+                    rv = DWARF.runtimeVersion(context.config))!!
+            if (context.shouldGenerateCoverage()) {
+                val cuAsMetadata = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), cu.reinterpret())!!
+                val fullName = this.fqNameSafe.asString() + this.name
+                val gcov = node(Int32(2).llvm, "$fullName.gcno".mdString(), "$fullName.gcda".mdString(), cuAsMetadata)
+                LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcov)
+            }
             DICreateFile(context.debugInfo.builder, path.file, path.folder)!!
         }
     }
