@@ -19,7 +19,6 @@ import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.builtins.UnsignedType
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
-import org.jetbrains.kotlin.descriptors.SourceFile
 import org.jetbrains.kotlin.descriptors.konan.CurrentKonanModuleOrigin
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
@@ -33,7 +32,6 @@ import org.jetbrains.kotlin.ir.symbols.*
 import org.jetbrains.kotlin.ir.types.*
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.getArguments
-import org.jetbrains.kotlin.ir.util.getContainingFile
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -1911,9 +1909,9 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
                     flags = "",
                     rv = DWARF.runtimeVersion(context.config))!!
             if (context.shouldGenerateCoverage()) {
-                val cuAsMetadata = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), cu.reinterpret())!!
+                val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), cu.reinterpret())!!
                 val fullName = this.fqNameSafe.asString() + this.name
-                val gcov = node(Int32(2).llvm, "$fullName.gcno".mdString(), "$fullName.gcda".mdString(), cuAsMetadata)
+                val gcov = node("$fullName.gcno".mdString(), "$fullName.gcda".mdString(), cuAsValue)
                 LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcov)
             }
             DICreateFile(context.debugInfo.builder, path.file, path.folder)!!
