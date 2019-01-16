@@ -1908,9 +1908,9 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
                     isOptimized = 0,
                     flags = "",
                     rv = DWARF.runtimeVersion(context.config))!!
-            if (context.shouldGenerateCoverage()) {
+            if (context.shouldGenerateGcov()) {
                 val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), cu.reinterpret())!!
-                val fullName = this.fqNameSafe.asString() + this.name
+                val fullName = path.path().removeSuffix(".kt")
                 val gcov = node("$fullName.gcno".mdString(), "$fullName.gcda".mdString(), cuAsValue)
                 LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcov)
             }

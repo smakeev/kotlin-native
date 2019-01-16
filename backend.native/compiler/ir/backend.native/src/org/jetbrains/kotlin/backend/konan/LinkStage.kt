@@ -5,8 +5,6 @@
 
 package org.jetbrains.kotlin.backend.konan
 
-import llvm.LLVMLinkModules2
-import org.jetbrains.kotlin.backend.konan.llvm.parseBitcodeFile
 import org.jetbrains.kotlin.konan.KonanExternalToolFailure
 import org.jetbrains.kotlin.konan.exec.Command
 import org.jetbrains.kotlin.konan.file.File
@@ -270,7 +268,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
     private fun compileWithNewLlvmPipeline(program: BitcodeFile, nativeLibs: List<String>, libraries: List<KonanLibrary>): ObjectFile {
         // Little hack to reduce stdlib linkage overhead
         with (cliTools) {
-            val annotated = if (context.shouldGenerateCoverage()) {
+            val annotated = if (context.shouldGenerateGcov()) {
                  optFixed(program, "-insert-gcov-profiling", *llvmProfilingFlags().toTypedArray())
             } else {
                 program
