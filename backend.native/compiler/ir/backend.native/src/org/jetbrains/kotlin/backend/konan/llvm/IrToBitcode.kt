@@ -1910,23 +1910,28 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
                     flags = "",
                     rv = DWARF.runtimeVersion(context.config))!!
             if (context.shouldGenerateGcov()) {
-                val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), cu.reinterpret())!!
-                val gcovDir = createDirForGcov(context.gcovPath()!!)
-                val filename = path.file.removeSuffix(".kt")
-                val fullName = if (fqNameSafe.asString().isEmpty()) {
-                    filename
-                } else {
-                    val packages = fqNameSafe.asString().replace('.', '/')
-                    File("${gcovDir.absolutePath}/$packages").mkdirs()
-                    fqNameSafe.asString().replace('.', '/') + '/' + filename
-                }
-                val gcov = node("${gcovDir.absolutePath}/$fullName.gcno".mdString(), "${gcovDir.absolutePath}/$fullName.gcda".mdString(), cuAsValue)
-                LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcov)
+                generateGcovMetadata(cu, fqNameSafe.asString(), path.file)
             }
             DICreateFile(context.debugInfo.builder, path.file, path.folder)!!
         }
     }
 
+    private fun generateGcovMetadata(compilationUnit: DICompileUnitRef, fqName: String, filename: String) {
+        val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compilationUnit.reinterpret())!!
+        val gcovDir = createDirForGcov(context.gcovPath()!!)
+        val filenameWithoutSuffix = filename.removeSuffix(".kt")
+        val qualifiedPath = if (fqName.isNotEmpty()) {
+            val packages = fqName.replace('.', '/')
+            File("${gcovDir.absolutePath}/$packages").mkdirs()
+            "$packages/"
+        } else {
+            ""
+        }
+        val gcnoPath = "${gcovDir.absolutePath}/$qualifiedPath$filenameWithoutSuffix.gcno"
+        val gcdaPath = "${gcovDir.absolutePath}/$qualifiedPath$filenameWithoutSuffix.gcda"
+        val gcovNode = node(gcnoPath.mdString(), gcdaPath.mdString(), cuAsValue)
+        LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
+    }
 
     private fun createDirForGcov(path: String): File {
         if (File(path).isFile) {
