@@ -35,6 +35,7 @@ import org.jetbrains.kotlin.ir.util.getArguments
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
+import org.jetbrains.kotlin.konan.file.File
 import org.jetbrains.kotlin.konan.target.CompilerOutputKind
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.resolve.descriptorUtil.classId
@@ -1910,11 +1911,29 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
                     rv = DWARF.runtimeVersion(context.config))!!
             if (context.shouldGenerateGcov()) {
                 val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), cu.reinterpret())!!
-                val fullName = path.path().removeSuffix(".kt")
-                val gcov = node("$fullName.gcno".mdString(), "$fullName.gcda".mdString(), cuAsValue)
+                val gcovDir = createDirForGcov(context.gcovPath()!!)
+                val filename = path.file.removeSuffix(".kt")
+                val fullName = if (fqNameSafe.asString().isEmpty()) {
+                    filename
+                } else {
+                    val packages = fqNameSafe.asString().replace('.', '/')
+                    File("${gcovDir.absolutePath}/$packages").mkdirs()
+                    fqNameSafe.asString().replace('.', '/') + '/' + filename
+                }
+                val gcov = node("${gcovDir.absolutePath}/$fullName.gcno".mdString(), "${gcovDir.absolutePath}/$fullName.gcda".mdString(), cuAsValue)
                 LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcov)
             }
             DICreateFile(context.debugInfo.builder, path.file, path.folder)!!
+        }
+    }
+
+
+    private fun createDirForGcov(path: String): File {
+        if (File(path).isFile) {
+            throw IllegalArgumentException("Given file is not a directory: $path")
+        }
+        return File(path).apply {
+            if (!exists) { mkdirs() }
         }
     }
 

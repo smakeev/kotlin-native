@@ -445,7 +445,9 @@ internal class Context(config: KonanConfig) : KonanBackendContext(config) {
 
     fun shouldUseLlc() = true // TODO
 
-    fun shouldGenerateGcov() = config.configuration.getBoolean(KonanConfigKeys.CODE_COVERAGE)
+    fun shouldGenerateGcov() = gcovPath() != null
+
+    fun gcovPath() = config.configuration.get<String>(KonanConfigKeys.GCOV_DIR)
 
     override fun log(message: () -> String) {
         if (phase?.verbose ?: false) {

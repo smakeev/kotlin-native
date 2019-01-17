@@ -159,8 +159,8 @@ class K2NativeCompilerArguments : CommonCompilerArguments() {
     @Argument(value = "-Xdebug-info-version", description = "generate debug info of given version (1, 2)")
     var debugInfoFormatVersion: String = "1" /* command line parser doesn't accept kotlin.Int type */
 
-    @Argument(value = "-Xcode-coverage", description = "generate profiling information")
-    var codeCoverage: Boolean = false
+    @Argument(value = "-Xgcov-dir", valueDescription = "<path>",  description = "generate GCOV information")
+    var codeCoverage: String? = null
 
     override fun configureAnalysisFlags(collector: MessageCollector): MutableMap<AnalysisFlag<*>, Any> =
             super.configureAnalysisFlags(collector).also {
