@@ -7,15 +7,16 @@ package org.jetbrains.kotlin.backend.konan.llvm
 
 import kotlinx.cinterop.allocArrayOf
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.reinterpret
 import llvm.*
-import org.jetbrains.kotlin.backend.konan.SYNTHETIC_OFFSET
-import org.jetbrains.kotlin.backend.konan.Context
-import org.jetbrains.kotlin.backend.konan.KonanConfig
-import org.jetbrains.kotlin.backend.konan.KonanConfigKeys
+import org.jetbrains.kotlin.backend.konan.*
 import org.jetbrains.kotlin.backend.konan.irasdescriptors.FunctionDescriptor
+import org.jetbrains.kotlin.backend.konan.irasdescriptors.fqNameSafe
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.ir.SourceManager.FileEntry
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
+import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.name
 import org.jetbrains.kotlin.js.descriptorUtils.getJetTypeFqName
 import org.jetbrains.kotlin.konan.KonanVersion
 import org.jetbrains.kotlin.konan.file.File
@@ -239,3 +240,34 @@ internal fun subroutineType(context: Context, llvmTargetData: LLVMTargetDataRef,
 @Suppress("UNCHECKED_CAST")
 private fun dwarfPointerType(context: Context, type: DITypeOpaqueRef) =
         DICreatePointerType(context.debugInfo.builder, type) as DITypeOpaqueRef
+
+// Create !llvm.gcov triple for the file in the following format:
+// { gcovDir/fqName.gcno, gcovDir/fqName.gcda, compileUnit }
+internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
+    if (context.shouldEmitGcov()) {
+        generateGcovMetadata(context, compileUnit, path, irFile)
+    }
+}
+
+private fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
+    val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compileUnit.reinterpret())!!
+    val gcovDir = context.createDirForGcov(context.config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY)!!)
+    val filename = irFile.name.removeSuffix(".kt")
+    val fqName = irFile.fqNameSafe.asString()
+    val qualifiedPath = if (fqName.isNotEmpty()) {
+        val packages = fqName.replace('.', '/')
+        File("${gcovDir.absolutePath}/$packages").mkdirs()
+        "$packages/"
+    } else {
+        ""
+    }
+    val gcnoPath = "${gcovDir.absolutePath}/$qualifiedPath$filename.gcno"
+    val gcdaPath = "${gcovDir.absolutePath}/$qualifiedPath$filename.gcda"
+    val gcovNode = node(gcnoPath.mdString(), gcdaPath.mdString(), cuAsValue)
+    LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
+}
+
+private fun Context.createDirForGcov(path: String)= File(path).also {
+    if (!it.isFile) reportCompilationError("Given path is not a directory: $path")
+    if (!it.exists) it.mkdirs()
+}

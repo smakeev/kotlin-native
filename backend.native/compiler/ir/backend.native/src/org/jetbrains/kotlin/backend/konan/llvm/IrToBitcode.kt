@@ -19,7 +19,6 @@ import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.builtins.UnsignedType
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
-import org.jetbrains.kotlin.descriptors.SourceFile
 import org.jetbrains.kotlin.descriptors.konan.CurrentKonanModuleOrigin
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
@@ -33,7 +32,6 @@ import org.jetbrains.kotlin.ir.symbols.*
 import org.jetbrains.kotlin.ir.types.*
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.getArguments
-import org.jetbrains.kotlin.ir.util.getContainingFile
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -1901,7 +1899,7 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     private fun IrFile.file(): DIFileRef {
         return context.debugInfo.files.getOrPut(this.fileEntry.name) {
             val path = this.fileEntry.name.toFileAndFolder()
-            DICreateCompilationUnit(
+            val cu = DICreateCompilationUnit(
                     builder     = context.debugInfo.builder,
                     lang        = DWARF.language(context.config),
                     File        = path.file,
@@ -1909,7 +1907,8 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
                     producer    = DWARF.producer,
                     isOptimized = 0,
                     flags       = "",
-                    rv          = DWARF.runtimeVersion(context.config))
+                    rv          = DWARF.runtimeVersion(context.config))!!
+            generateGcovMetadataIfNeeded(context, cu, path, this)
             DICreateFile(context.debugInfo.builder, path.file, path.folder)!!
         }
     }

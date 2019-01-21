@@ -446,6 +446,8 @@ internal class Context(config: KonanConfig) : KonanBackendContext(config) {
 
     fun shouldOptimize() = config.configuration.getBoolean(KonanConfigKeys.OPTIMIZATION)
 
+    fun shouldEmitGcov() = config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY) != null
+
     override fun log(message: () -> String) {
         if (phase?.verbose ?: false) {
             println(message())
