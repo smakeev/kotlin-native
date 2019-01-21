@@ -157,7 +157,7 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
 
     private fun link(objectFiles: List<ObjectFile>,
                      includedBinaries: List<String>,
-                     libraryProvidedLinkerFlags: List<String>): ExecutableFile? {
+                     libraryProvidedLinkerFlags: List<String>): ExecutableFile {
         val frameworkLinkerArgs: List<String>
         val executable: String
 
@@ -193,13 +193,26 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
             }
         } catch (e: KonanExternalToolFailure) {
             context.reportCompilationError("${e.toolName} invocation reported errors")
-            return null
         }
         return executable
     }
 
     fun linkStage() {
-        val bitcodeFiles = listOf(emitted) +
+
+        val program = if (context.shouldEmitGcov()) {
+            val gcovProcessedBc = temporary("gcov_processed", ".bc")
+            // TODO: replace with compiler distribution
+            val gcovPassLibrary = "/Users/jetbrains/src/GCOVProfilingPatched/cmake-build-debug/GCOVProfilingPatched.dylib"
+            hostLlvmTool("opt", emitted,
+                    "-load", gcovPassLibrary,
+                    "-insert-gcov-profiling-patched",
+                    "-o", gcovProcessedBc)
+            gcovProcessedBc
+        } else {
+            emitted
+        }
+
+        val bitcodeFiles = listOf(program) +
                 libraries.map { it.bitcodePaths }.flatten().filter { it.isBitcode }
 
         val includedBinaries =

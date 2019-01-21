@@ -267,7 +267,9 @@ private fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef
     LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
 }
 
-private fun Context.createDirForGcov(path: String)= File(path).also {
-    if (!it.isFile) reportCompilationError("Given path is not a directory: $path")
-    if (!it.exists) it.mkdirs()
+private fun Context.createDirForGcov(path: String) = File(path).also {
+    when {
+        it.isFile -> reportCompilationError("Given path is not a directory: $path")
+        !it.exists -> it.mkdirs()
+    }
 }
