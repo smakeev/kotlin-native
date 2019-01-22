@@ -195,7 +195,13 @@ class K2Native : CLICompiler<K2NativeCompilerArguments>() {
 
                 put(BITCODE_EMBEDDING_MODE, selectBitcodeEmbeddingMode(this, arguments, outputKind))
                 put(DEBUG_INFO_VERSION, arguments.debugInfoFormatVersion.toInt())
-                arguments.gcovDir?.let { put(GCOV_DIRECTORY, it) }
+                arguments.gcovDir?.let {
+                    if (!arguments.debug) {
+                        configuration.report(STRONG_WARNING,
+                                "Coverage information might be incorrect. Please use debug mode instead.")
+                    }
+                    put(GCOV_DIRECTORY, it)
+                }
             }
         }
     }
