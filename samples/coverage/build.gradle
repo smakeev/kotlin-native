@@ -1,0 +1,19 @@
+plugins {
+    id 'kotlin-multiplatform'
+}
+
+// Determine host preset.
+def hostPreset = MPPTools.defaultHostPreset(project)
+
+kotlin {
+    targets {
+        fromPreset(hostPreset, 'coverage') {
+            compilations.main.outputKinds 'EXECUTABLE'
+            compilations.main.entryPoint 'coverage.main'
+            compilations.main.extraOpts "-Xgcov-dir=${project.buildDir}/gcov"
+        }
+    }
+}
+
+// TODO: collect two sets, sort them, apply `llvm-cov gcov`(file.kt, file.gcda, file.gcno) 
+//  optionally use lcov
