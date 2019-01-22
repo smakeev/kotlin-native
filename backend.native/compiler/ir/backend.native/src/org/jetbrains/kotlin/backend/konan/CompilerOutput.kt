@@ -8,6 +8,7 @@ import llvm.LLVMLinkModules2
 import llvm.LLVMModuleRef
 import llvm.LLVMWriteBitcodeToFile
 import org.jetbrains.kotlin.backend.konan.library.impl.buildLibrary
+import org.jetbrains.kotlin.backend.konan.llvm.LlvmCli
 import org.jetbrains.kotlin.backend.konan.llvm.parseBitcodeFile
 import org.jetbrains.kotlin.konan.KonanAbiVersion
 import org.jetbrains.kotlin.konan.KonanVersion
@@ -22,7 +23,8 @@ val CompilerOutputKind.isNativeBinary: Boolean get() = when (this) {
 
 internal fun produceOutput(context: Context, phaser: PhaseManager) {
 
-    val llvmModule = context.llvmModule!!
+    // run GCOVProfiling before linking to prevent generation of *.gcno/*.gcda for non-user code.
+    val llvmModule = profileModuleIfNeeded(context.llvmModule!!, context)
     val config = context.config.configuration
     val tempFiles = context.config.tempFiles
     val produce = config.get(KonanConfigKeys.PRODUCE)
@@ -109,3 +111,14 @@ private fun parseAndLinkBitcodeFile(llvmModule: LLVMModuleRef, path: String) {
         throw Error("failed to link $path") // TODO: retrieve error message from LLVM.
     }
 }
+
+private fun profileModuleIfNeeded(llvmModule: LLVMModuleRef, context: Context): LLVMModuleRef =
+        if (context.shouldEmitGcov()) {
+            // Ugly way to run , but there is no way to perform
+            val nonProfiledModuleFile = context.config.tempFiles.create("non_profiled", ".bc")
+            LLVMWriteBitcodeToFile(llvmModule, nonProfiledModuleFile.absolutePath)
+            val profiledModulePath = LlvmCli(context).profileWithGcov(nonProfiledModuleFile.absolutePath)
+            parseBitcodeFile(profiledModulePath)
+        } else {
+            llvmModule
+        }
