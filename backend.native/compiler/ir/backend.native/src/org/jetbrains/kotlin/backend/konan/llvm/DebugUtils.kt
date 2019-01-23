@@ -241,18 +241,18 @@ internal fun subroutineType(context: Context, llvmTargetData: LLVMTargetDataRef,
 private fun dwarfPointerType(context: Context, type: DITypeOpaqueRef) =
         DICreatePointerType(context.debugInfo.builder, type) as DITypeOpaqueRef
 
-// Create !llvm.gcov triple for the file in the following format:
-// { gcovDir/fqName.gcno, gcovDir/fqName.gcda, compileUnit }
+
 internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
     if (context.shouldEmitGcov()) {
         generateGcovMetadata(context, compileUnit, path, irFile)
     }
 }
 
-private fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
+// Create !llvm.gcov triple for the file in the following format:
+// { gcovDir/fqName.gcno, gcovDir/fqName.gcda, compileUnit }
+internal fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
     val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compileUnit.reinterpret())!!
     val gcovDir = context.createDirForGcov(context.config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY)!!)
-    val filename = irFile.name.removeSuffix(".kt")
     val fqName = irFile.fqNameSafe.asString()
     val qualifiedPath = if (fqName.isNotEmpty()) {
         val packages = fqName.replace('.', '/')
@@ -261,11 +261,16 @@ private fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef
     } else {
         ""
     }
+    val filename = mangleFilenameForGcov(path.folder, irFile.name.removeSuffix(".kt"))
     val gcnoPath = "${gcovDir.absolutePath}/$qualifiedPath$filename.gcno"
     val gcdaPath = "${gcovDir.absolutePath}/$qualifiedPath$filename.gcda"
     val gcovNode = node(gcnoPath.mdString(), gcdaPath.mdString(), cuAsValue)
     LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
 }
+
+// TODO: is such mangling is to aggressive?
+private fun mangleFilenameForGcov(absolutePath: String, filename: String): String =
+        "$filename${base64Encode(absolutePath.toByteArray())}"
 
 private fun Context.createDirForGcov(path: String) = File(path).also {
     when {

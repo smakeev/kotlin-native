@@ -22,7 +22,6 @@ val CompilerOutputKind.isNativeBinary: Boolean get() = when (this) {
 }
 
 internal fun produceOutput(context: Context, phaser: PhaseManager) {
-
     // run GCOVProfiling before linking to prevent generation of *.gcno/*.gcda for non-user code.
     val llvmModule = profileModuleIfNeeded(context.llvmModule!!, context)
     val config = context.config.configuration
@@ -52,6 +51,7 @@ internal fun produceOutput(context: Context, phaser: PhaseManager) {
                     listOf(tempFiles.cAdapterBitcodeName)
                 } else emptyList()
 
+            // TODO: split into two sets: that are required to generate gcov and that are not
             val nativeLibraries = 
                 context.config.nativeLibraries +
                 context.config.defaultNativeLibraries + 
