@@ -241,38 +241,3 @@ internal fun subroutineType(context: Context, llvmTargetData: LLVMTargetDataRef,
 @Suppress("UNCHECKED_CAST")
 private fun dwarfPointerType(context: Context, type: DITypeOpaqueRef) =
         DICreatePointerType(context.debugInfo.builder, type) as DITypeOpaqueRef
-
-
-internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
-    if (context.shouldEmitGcov()) {
-        generateGcovMetadata(context, compileUnit, path, irFile)
-    }
-}
-
-// Create !llvm.gcov triple for the file in the following format:
-// { gcovDir/fqName.gcno, gcovDir/fqName.gcda, compileUnit }
-internal fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
-    // Skip fake files
-    if (irFile is IrFileImpl) return
-
-    val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compileUnit.reinterpret())!!
-    val gcovDir = context.createDirForGcov(context.config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY)!!)
-    val filename = mangleFilenameForGcov(path.folder, irFile.name.removeSuffix(".kt"))
-
-    val gcnoPath = "${gcovDir.absolutePath}/$filename.gcno"
-    val gcdaPath = "${gcovDir.absolutePath}/$filename.gcda"
-    val gcovNode = node(gcnoPath.mdString(), gcdaPath.mdString(), cuAsValue)
-
-    LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
-}
-
-// TODO: is such mangling is to aggressive?
-private fun mangleFilenameForGcov(absolutePath: String, filename: String): String =
-        "$filename${base64Encode(absolutePath.toByteArray())}"
-
-private fun Context.createDirForGcov(path: String) = File(path).also {
-    when {
-        it.isFile -> reportCompilationError("Given path is not a directory: $path")
-        !it.exists -> it.mkdirs()
-    }
-}

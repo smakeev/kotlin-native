@@ -5,10 +5,12 @@
 
 package org.jetbrains.kotlin.backend.konan
 
+import org.jetbrains.kotlin.backend.konan.llvm.BitcodeFile
 import org.jetbrains.kotlin.backend.konan.llvm.LlvmCli
 import org.jetbrains.kotlin.konan.KonanExternalToolFailure
 import org.jetbrains.kotlin.konan.file.File
 import org.jetbrains.kotlin.konan.file.isBitcode
+import org.jetbrains.kotlin.konan.library.KonanLibrary
 import org.jetbrains.kotlin.konan.target.*
 
 typealias ExecutableFile = String
@@ -103,9 +105,18 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
         return executable
     }
 
+    private fun KonanLibrary.getBitcodeFiles(): List<BitcodeFile> =
+            bitcodePaths.filter { it.isBitcode }
+
     fun linkStage() {
+        val (libsToCover, otherLibs) = getCoveredLibraries(config, libraries)
+
+        val coveredBitcode = libsToCover.flatMap { lib ->
+            lib.getBitcodeFiles().map { llvmCli.profileWithGcov(it) }
+        }
+
         val bitcodeFiles = listOf(emitted) +
-                libraries.map { it.bitcodePaths }.flatten().filter { it.isBitcode }
+                coveredBitcode + otherLibs.flatMap { it.getBitcodeFiles() }
 
         val includedBinaries =
                 libraries.map { it.includedPaths }.flatten()

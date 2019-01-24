@@ -22,7 +22,6 @@ kotlin {
             executable(listOf(DEBUG)) {
                 entryPoint = "coverage.main"
             }
-            getExecutable("test", DEBUG)
         }
         compilations["main"].extraOpts = mutableListOf("-Xgcov-dir=$buildDir/gcov")
     }

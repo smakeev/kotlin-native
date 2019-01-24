@@ -162,6 +162,13 @@ class K2NativeCompilerArguments : CommonCompilerArguments() {
     @Argument(value = "-Xgcov-dir", valueDescription = "<path>", description = "Save generated *.gcno/*.gcda files to the given directory")
     var gcovDir: String? = null
 
+    @Argument(
+            value = "-Xlibrary-to-cover",
+            valueDescription = "<path>",
+            description = "TODO"
+    )
+    var coveredLibraries: Array<String>? = null
+
     override fun configureAnalysisFlags(collector: MessageCollector): MutableMap<AnalysisFlag<*>, Any> =
             super.configureAnalysisFlags(collector).also {
                 val useExperimental = it[AnalysisFlags.useExperimental] as List<*>

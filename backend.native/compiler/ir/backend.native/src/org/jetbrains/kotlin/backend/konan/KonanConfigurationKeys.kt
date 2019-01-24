@@ -34,6 +34,8 @@ class KonanConfigKeys {
                 = CompilerConfigurationKey.create<List<String>>("friend module paths")
         val GCOV_DIRECTORY: CompilerConfigurationKey<String?>
                 = CompilerConfigurationKey.create("directory to store generated coverage information")
+        val LIBRARIES_TO_COVER: CompilerConfigurationKey<List<String>>
+                = CompilerConfigurationKey.create<List<String>>("libraries to profile") // TODO: better description
         val GENERATE_TEST_RUNNER: CompilerConfigurationKey<TestRunnerKind>
                 = CompilerConfigurationKey.create("generate test runner") 
         val INCLUDED_BINARY_FILES: CompilerConfigurationKey<List<String>>

@@ -202,6 +202,8 @@ class K2Native : CLICompiler<K2NativeCompilerArguments>() {
                     }
                     put(GCOV_DIRECTORY, it)
                 }
+
+                put(LIBRARIES_TO_COVER, selectCoveredLibraries(configuration, arguments))
             }
         }
     }
@@ -280,6 +282,22 @@ private fun selectExportedLibraries(
         emptyList()
     } else {
         exportedLibraries
+    }
+}
+
+// TODO: Unify with `selectExportedLibraries`?
+// TODO: Better error message
+private fun selectCoveredLibraries(
+        configuration: CompilerConfiguration,
+        arguments: K2NativeCompilerArguments
+): List<String> {
+    val coveredLibraries = arguments.coveredLibraries?.toList().orEmpty()
+
+    return if (arguments.gcovDir == null && coveredLibraries.isNotEmpty()) {
+        configuration.report(ERROR, "-Xgcov-dir should be provided")
+        emptyList()
+    } else {
+        coveredLibraries
     }
 }
 
