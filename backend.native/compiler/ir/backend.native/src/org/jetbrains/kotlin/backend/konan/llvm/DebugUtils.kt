@@ -10,6 +10,7 @@ import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.reinterpret
 import llvm.*
 import org.jetbrains.kotlin.backend.konan.*
+import org.jetbrains.kotlin.backend.konan.ir.IrFileImpl
 import org.jetbrains.kotlin.backend.konan.irasdescriptors.FunctionDescriptor
 import org.jetbrains.kotlin.backend.konan.irasdescriptors.fqNameSafe
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
@@ -251,20 +252,17 @@ internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompi
 // Create !llvm.gcov triple for the file in the following format:
 // { gcovDir/fqName.gcno, gcovDir/fqName.gcda, compileUnit }
 internal fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
+    // Skip fake files
+    if (irFile is IrFileImpl) return
+
     val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compileUnit.reinterpret())!!
     val gcovDir = context.createDirForGcov(context.config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY)!!)
     val filename = mangleFilenameForGcov(path.folder, irFile.name.removeSuffix(".kt"))
-    println(irFile.name)
-    if (irFile.name.isEmpty()) {
-        irFile.declarations.forEach {
-            println(it.descriptor.name.asString())
-        }
-    }
-    println(irFile.fileEntry.name)
+
     val gcnoPath = "${gcovDir.absolutePath}/$filename.gcno"
     val gcdaPath = "${gcovDir.absolutePath}/$filename.gcda"
-    println(gcnoPath)
     val gcovNode = node(gcnoPath.mdString(), gcdaPath.mdString(), cuAsValue)
+
     LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
 }
 

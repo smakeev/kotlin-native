@@ -1,6 +1,6 @@
 package coverage
 
-import baz
+import coverage.foo.baz
 
 fun hello(): String = "Hello, Test coverage"
 

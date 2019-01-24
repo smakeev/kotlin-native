@@ -1899,17 +1899,18 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     private fun IrFile.file(): DIFileRef {
         return context.debugInfo.files.getOrPut(this.fileEntry.name) {
             val path = this.fileEntry.name.toFileAndFolder()
+            val file = if (context.shouldEmitGcov()) path.path() else path.file
             val cu = DICreateCompilationUnit(
                     builder     = context.debugInfo.builder,
                     lang        = DWARF.language(context.config),
-                    File        = if (context.shouldEmitGcov()) path.path() else path.file,
+                    File        = file,
                     dir         = path.folder,
                     producer    = DWARF.producer,
                     isOptimized = 0,
                     flags       = "",
                     rv          = DWARF.runtimeVersion(context.config))!!
             generateGcovMetadataIfNeeded(context, cu, path, this)
-            DICreateFile(context.debugInfo.builder, if (context.shouldEmitGcov()) path.path() else path.file, path.folder)!!
+            DICreateFile(context.debugInfo.builder, file, path.folder)!!
         }
     }
 

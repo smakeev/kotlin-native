@@ -114,7 +114,7 @@ private fun parseAndLinkBitcodeFile(llvmModule: LLVMModuleRef, path: String) {
 
 private fun profileModuleIfNeeded(llvmModule: LLVMModuleRef, context: Context): LLVMModuleRef =
         if (context.shouldEmitGcov()) {
-            // Ugly way to run , but there is no way to perform
+            // Ugly way to run instrumentation, but there is no way to perform it on LLVMModuleRef
             val nonProfiledModuleFile = context.config.tempFiles.create("non_profiled", ".bc")
             LLVMWriteBitcodeToFile(llvmModule, nonProfiledModuleFile.absolutePath)
             val profiledModulePath = LlvmCli(context).profileWithGcov(nonProfiledModuleFile.absolutePath)
