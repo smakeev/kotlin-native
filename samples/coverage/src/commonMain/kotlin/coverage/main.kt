@@ -1,7 +1,9 @@
 package coverage
 
+import baz
+
 fun hello(): String = "Hello, Test coverage"
 
 fun main() {
-    println("HELLO")
+    baz(arrayOf("abc"))
 }

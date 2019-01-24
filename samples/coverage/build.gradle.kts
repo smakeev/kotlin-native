@@ -28,25 +28,19 @@ kotlin {
     }
 }
 
-// Soon will be implemented as part of Gradle plugin.
-tasks.create("collectGcov") {
+tasks.create("createCoverageReport") {
     dependsOn("macosTest")
 
-    description = "Create .gcov files based on .gdca and .gcno"
+    description = "Create lcov report"
 
-    fileTree("$buildDir/gcov").matching { include("**/.gcda") }.forEach { file ->
+    doLast {
         exec {
-            // TODO: change workingDir to something more useful
-            workingDir = file.parentFile
-            // TODO: use `llvm-cov` from distribution
-            commandLine("llvm-cov", "gcov", file.name)
+            workingDir = File("$buildDir/gcov")
+            commandLine("lcov", "-c", "-d", ".", "-o", "coverage_results.info")
+        }
+        exec {
+            workingDir = File("$buildDir/gcov")
+            commandLine("genhtml", "coverage_results.info", "--output-directory", "out")
         }
     }
-
-}
-
-tasks.create("createCoverageReport") {
-    dependsOn("collectGcov")
-
-    description = "Create lcov report"
 }

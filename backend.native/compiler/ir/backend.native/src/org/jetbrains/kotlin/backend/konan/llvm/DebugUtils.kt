@@ -253,17 +253,17 @@ internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompi
 internal fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
     val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compileUnit.reinterpret())!!
     val gcovDir = context.createDirForGcov(context.config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY)!!)
-    val fqName = irFile.fqNameSafe.asString()
-    val qualifiedPath = if (fqName.isNotEmpty()) {
-        val packages = fqName.replace('.', '/')
-        File("${gcovDir.absolutePath}/$packages").mkdirs()
-        "$packages/"
-    } else {
-        ""
-    }
     val filename = mangleFilenameForGcov(path.folder, irFile.name.removeSuffix(".kt"))
-    val gcnoPath = "${gcovDir.absolutePath}/$qualifiedPath$filename.gcno"
-    val gcdaPath = "${gcovDir.absolutePath}/$qualifiedPath$filename.gcda"
+    println(irFile.name)
+    if (irFile.name.isEmpty()) {
+        irFile.declarations.forEach {
+            println(it.descriptor.name.asString())
+        }
+    }
+    println(irFile.fileEntry.name)
+    val gcnoPath = "${gcovDir.absolutePath}/$filename.gcno"
+    val gcdaPath = "${gcovDir.absolutePath}/$filename.gcda"
+    println(gcnoPath)
     val gcovNode = node(gcnoPath.mdString(), gcdaPath.mdString(), cuAsValue)
     LLVMAddNamedMetadataOperand(context.llvmModule, "llvm.gcov", gcovNode)
 }
