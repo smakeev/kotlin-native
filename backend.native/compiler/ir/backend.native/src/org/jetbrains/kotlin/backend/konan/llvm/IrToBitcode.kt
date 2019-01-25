@@ -1899,7 +1899,13 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     private fun IrFile.file(): DIFileRef {
         return context.debugInfo.files.getOrPut(this.fileEntry.name) {
             val path = this.fileEntry.name.toFileAndFolder()
-            val file = if (context.shouldEmitGcov()) path.path() else path.file
+            // LLVM's GCOVProfilingPass as of version 6.0.1 uses only filename part
+            // of debug info when creating *.gcno files.
+            // So we need to store absolute path as filename in case of code coverage
+            // because it is required to restore path to file from the info
+            // that is stored in *.gcno file.
+            val file = if (context.coverageMode == CodeCoverageMode.CompilerOutput)
+                path.path() else path.file
             val cu = DICreateCompilationUnit(
                     builder     = context.debugInfo.builder,
                     lang        = DWARF.language(context.config),

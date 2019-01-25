@@ -1272,9 +1272,6 @@ internal class IrDeserializer(val context: Context,
             }
         }
 
-        val sourceFileName = proto.fileName
-        context.ir.originalModuleIndex.declarationToFile[declaration.descriptor.original] = sourceFileName
-
         if (!(descriptor is VariableDescriptor) && descriptor != rootFunction)
             localDeserializer.popContext(descriptor)
         context.log{"### Deserialized declaration: ${ir2string(declaration)}"}
@@ -1337,6 +1334,11 @@ internal class IrDeserializer(val context: Context,
         val irProto = KonanIr.IrDeclaration.parseFrom(byteArray, KonanSerializerProtocol.extensionRegistry)
         val declaration = deserializeDeclaration(irProto)
 
-        return adaptDeserializedTypeParameters(declaration)
+        val result = adaptDeserializedTypeParameters(declaration)
+
+        val sourceFileName = irProto.fileName
+        context.ir.originalModuleIndex.declarationToFile[result.descriptor.original] = sourceFileName
+
+        return result
     }
 }

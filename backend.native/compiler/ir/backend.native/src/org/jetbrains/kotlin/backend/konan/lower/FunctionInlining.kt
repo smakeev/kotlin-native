@@ -269,6 +269,7 @@ private class Inliner(val globalSubstituteMap: MutableMap<DeclarationDescriptor,
             }
         }
 
+        // TODO: Add warning and TODO for assert
         val sourceFileName = context.ir.originalModuleIndex.declarationToFile[callee.descriptor.original] ?: ""
 
         copyIrElement.addCurrentSubstituteMap(globalSubstituteMap)

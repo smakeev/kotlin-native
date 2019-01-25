@@ -45,6 +45,8 @@ internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompi
 
 internal fun profileModuleIfNeeded(llvmModule: LLVMModuleRef, context: Context): LLVMModuleRef {
     val outputKind = context.config.configuration.get(KonanConfigKeys.PRODUCE)!!
+    // We run the pass only in case of native binary output. KLIBs are profiled after linkage.
+    // TODO: improve description
     return if (context.coverageMode is CodeCoverageMode.CompilerOutput && outputKind.isNativeBinary) {
         val nonProfiledModuleFile = context.config.tempFiles.create("non_profiled", ".bc")
         LLVMWriteBitcodeToFile(llvmModule, nonProfiledModuleFile.absolutePath)
@@ -58,8 +60,6 @@ internal fun profileModuleIfNeeded(llvmModule: LLVMModuleRef, context: Context):
 // Create !llvm.gcov triple for the file in the following format:
 // { gcovDir/fqName.gcno, gcovDir/fqName.gcda, compileUnit }
 internal fun generateGcovMetadata(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
-    // Skip fake files
-    if (irFile is IrFileImpl) return
 
     val cuAsValue = LLVMMetadataAsValue(LLVMGetModuleContext(context.llvmModule), compileUnit.reinterpret())!!
     val gcovDir = context.createDirForGcov(context.config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY)!!)

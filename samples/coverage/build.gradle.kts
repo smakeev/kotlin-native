@@ -24,6 +24,9 @@ kotlin {
             }
         }
         compilations["main"].extraOpts = mutableListOf("-Xgcov-dir=$buildDir/gcov")
+        binaries.getExecutable("test", DEBUG).apply {
+            freeCompilerArgs = mutableListOf("-Xgcov-dir=$buildDir/gcov", "-Xlibrary-to-profile=${compilations["main"].output.classesDirs.singleFile.absolutePath}")
+        }
     }
 }
 

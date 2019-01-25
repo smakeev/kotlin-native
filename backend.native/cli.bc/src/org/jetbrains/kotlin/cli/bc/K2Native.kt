@@ -287,6 +287,8 @@ private fun selectExportedLibraries(
 
 // TODO: Unify with `selectExportedLibraries`?
 // TODO: Better error message
+// TODO: Can we store some metainformation about presence of !llvm.gcov in the library
+// Although it will become when IR-based libraries will land.
 private fun selectCoveredLibraries(
         configuration: CompilerConfiguration,
         arguments: K2NativeCompilerArguments
