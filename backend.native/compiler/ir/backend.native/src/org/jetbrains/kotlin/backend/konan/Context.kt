@@ -50,6 +50,7 @@ import java.lang.System.out
 import kotlin.LazyThreadSafetyMode.PUBLICATION
 import kotlin.reflect.KProperty
 import org.jetbrains.kotlin.backend.common.ir.copyTo
+import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.ir.symbols.impl.IrTypeParameterSymbolImpl
 
 /**
@@ -446,7 +447,7 @@ internal class Context(config: KonanConfig) : KonanBackendContext(config) {
 
     fun shouldOptimize() = config.configuration.getBoolean(KonanConfigKeys.OPTIMIZATION)
 
-    fun shouldEmitGcov() = config.configuration.get(KonanConfigKeys.GCOV_DIRECTORY) != null
+    val coverageMode: CodeCoverageMode = determineCoverageMode(config.configuration)
 
     override fun log(message: () -> String) {
         if (phase?.verbose ?: false) {

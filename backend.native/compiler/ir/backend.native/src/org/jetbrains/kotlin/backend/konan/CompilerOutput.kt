@@ -22,10 +22,11 @@ val CompilerOutputKind.isNativeBinary: Boolean get() = when (this) {
 }
 
 internal fun produceOutput(context: Context, phaser: PhaseManager) {
-    val llvmModule = context.llvmModule!!
     val config = context.config.configuration
     val tempFiles = context.config.tempFiles
     val produce = config.get(KonanConfigKeys.PRODUCE)
+
+    val llvmModule = profileModuleIfNeeded(context.llvmModule!!, context)
 
     phaser.phase(KonanPhase.C_STUBS) {
         context.cStubsManager.compile(context.config.clang, context.messageCollector, context.phase!!.verbose)?.let {

@@ -110,6 +110,7 @@ internal class LlvmCli(val context: Context) {
 
     fun profileWithGcov(bitcode: String): String {
         val gcovProfiledBc = temporary("gcov_profiled", ".bc")
+        // TODO: Other platforms
         val llvmPassesDir = (platform.configurables as AppleConfigurables).absoluteLlvmPassesDir
         val gcovPassLibrary =  "$llvmPassesDir/GCOVProfilingPatched.dylib"
         hostLlvmTool("opt", bitcode,

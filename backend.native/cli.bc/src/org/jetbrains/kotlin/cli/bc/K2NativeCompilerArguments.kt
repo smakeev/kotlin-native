@@ -163,9 +163,9 @@ class K2NativeCompilerArguments : CommonCompilerArguments() {
     var gcovDir: String? = null
 
     @Argument(
-            value = "-Xlibrary-to-cover",
+            value = "-Xlibrary-to-profile",
             valueDescription = "<path>",
-            description = "TODO"
+            description = "Path to library that should be profiled. If no library is provided then compiler output is profiled instead."
     )
     var coveredLibraries: Array<String>? = null
 

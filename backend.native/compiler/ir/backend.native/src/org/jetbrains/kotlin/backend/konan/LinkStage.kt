@@ -109,20 +109,12 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
             bitcodePaths.filter { it.isBitcode }
 
     fun linkStage() {
-        val (libsToCover, otherLibs) = getCoveredLibraries(config, libraries)
 
-        val coveredBitcode = libsToCover.flatMap { lib ->
-            lib.getBitcodeFiles().map { llvmCli.profileWithGcov(it) }
-        }
+        val bitcodeFiles = prepareBitcodeFiles()
 
-        val bitcodeFiles = listOf(emitted) +
-                coveredBitcode + otherLibs.flatMap { it.getBitcodeFiles() }
+        val includedBinaries = libraries.map { it.includedPaths }.flatten()
 
-        val includedBinaries =
-                libraries.map { it.includedPaths }.flatten()
-
-        val libraryProvidedLinkerFlags =
-                libraries.map { it.linkerOpts }.flatten()
+        val libraryProvidedLinkerFlags = libraries.map { it.linkerOpts }.flatten()
 
         val objectFiles: MutableList<String> = mutableListOf()
 
@@ -142,5 +134,18 @@ internal class LinkStage(val context: Context, val phaser: PhaseManager) {
             link(objectFiles, includedBinaries, libraryProvidedLinkerFlags)
         }
     }
+
+    private fun prepareBitcodeFiles(): List<BitcodeFile> =
+        listOf(emitted) + if (context.coverageMode is CodeCoverageMode.Libraries) {
+            val (libsToCover, otherLibs) = context.coverageMode.getCoveredLibraries(libraries)
+
+            val coveredBitcode = libsToCover.flatMap { lib ->
+                lib.getBitcodeFiles().map { llvmCli.profileWithGcov(it) }
+            }
+            coveredBitcode + otherLibs.flatMap { it.getBitcodeFiles() }
+        } else {
+            libraries.flatMap { it.getBitcodeFiles() }
+        }
+
 }
 

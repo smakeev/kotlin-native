@@ -12,18 +12,46 @@ import org.jetbrains.kotlin.konan.file.File
 import org.jetbrains.kotlin.konan.library.KonanLibrary
 import org.jetbrains.kotlin.konan.library.resolver.KonanLibraryResolveResult
 
-internal fun getCoveredLibraries(
-        configuration: CompilerConfiguration,
-        librariesToLink: List<KonanLibrary>
-): Pair<List<KonanLibrary>, List<KonanLibrary>> {
-    val coveredLibraries = configuration.getList(KonanConfigKeys.LIBRARIES_TO_COVER).map { File(it) }.toSet()
+sealed class CodeCoverageMode {
 
-    return librariesToLink.partition { it.libraryFile in coveredLibraries }
+    object None : CodeCoverageMode()
+
+    object CompilerOutput : CodeCoverageMode()
+
+    class Libraries(val librariesToProfile: List<String>) : CodeCoverageMode() {
+
+        // Split linked libraries into two lists:
+        // 1. Libs that should be profiled
+        // 2. And that should not
+        fun getCoveredLibraries(librariesToLink: List<KonanLibrary>): Pair<List<KonanLibrary>, List<KonanLibrary>> {
+            val libsSet = librariesToProfile.map { File(it) }.toSet()
+            return librariesToLink.partition { it.libraryFile in libsSet }
+        }
+    }
 }
 
+internal fun determineCoverageMode(configuration: CompilerConfiguration): CodeCoverageMode =
+        when {
+            configuration.get<String>(KonanConfigKeys.GCOV_DIRECTORY) == null -> CodeCoverageMode.None
+            configuration.getList(KonanConfigKeys.LIBRARIES_TO_COVER).isNullOrEmpty() -> CodeCoverageMode.CompilerOutput
+            else -> CodeCoverageMode.Libraries(configuration.getList(KonanConfigKeys.LIBRARIES_TO_COVER))
+        }
+
 internal fun generateGcovMetadataIfNeeded(context: Context, compileUnit: DICompileUnitRef, path: FileAndFolder, irFile: IrFile) {
-    if (context.shouldEmitGcov()) {
+    if (context.coverageMode == CodeCoverageMode.CompilerOutput) {
         generateGcovMetadata(context, compileUnit, path, irFile)
+    }
+}
+
+internal fun profileModuleIfNeeded(llvmModule: LLVMModuleRef, context: Context): LLVMModuleRef {
+    val outputKind = context.config.configuration.get(KonanConfigKeys.PRODUCE)!!
+    return if (context.coverageMode is CodeCoverageMode.CompilerOutput && outputKind.isNativeBinary) {
+        val nonProfiledModuleFile = context.config.tempFiles.create("non_profiled", ".bc")
+        LLVMWriteBitcodeToFile(llvmModule, nonProfiledModuleFile.absolutePath)
+        val profiledModulePath = LlvmCli(context).profileWithGcov(nonProfiledModuleFile.absolutePath)
+        parseBitcodeFile(profiledModulePath)
+    } else {
+        llvmModule
     }
 }
 
