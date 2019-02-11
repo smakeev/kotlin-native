@@ -16,11 +16,11 @@ linkerOpts = -fvisibility-inlines-hidden \
     -pedantic -Wno-long-long -Wcovered-switch-default -Wnon-virtual-dtor -Wdelete-non-virtual-dtor \
     -std=c++11 \
     -DNDEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS \
-    -ldebugInfo -lcoverageMapping -lLLVMTarget -lLLVMMC -lLLVMLinker -lLLVMTransformUtils -lLLVMBitWriter \
+    -ldebugInfo -lcoverageMapping -lLLVMCoverage -lLLVMTarget -lLLVMMC -lLLVMLinker -lLLVMTransformUtils -lLLVMBitWriter \
     -lLLVMBitReader -lLLVMAnalysis -lLLVMProfileData -lLLVMObject -lLLVMMCParser -lLLVMMC \
     -lLLVMCore -lLLVMBinaryFormat -lLLVMSupport -lLLVMDemangle
 
-# ./llvm-config --libs analysis bitreader bitwriter core linker target
+# ./llvm-config --libs analysis bitreader bitwriter core linker target coverage
 
 
 linkerOpts.osx = -fPIC \

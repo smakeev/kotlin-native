@@ -1,5 +1,7 @@
 package org.jetbrains.kotlin.backend.konan.llvm
 
+import kotlinx.cinterop.*
+import llvm.*
 import org.jetbrains.kotlin.backend.common.IrElementVisitorVoidWithContext
 import org.jetbrains.kotlin.backend.common.push
 import org.jetbrains.kotlin.backend.konan.Context
@@ -13,7 +15,8 @@ import org.jetbrains.kotlin.ir.visitors.acceptVoid
 
 
 // #coverage TODO: Probably should hold either irFile ref or FileID
-internal class SourceMappingRegion(
+internal data class SourceMappingRegion(
+        val fileId: Int,
         val startLine: Int,
         val startColumn: Int,
         val endLine: Int,
@@ -24,48 +27,59 @@ internal class SourceMappingRegion(
 }
 
 internal class FunctionMapping(
+        val fileIds: IntArray,
         val pathToFile: String,
         val function: String,
-        val regions: List<SourceMappingRegion>
+        val regions: List<SourceMappingRegion>,
+        val hash: Long
 )
 
 internal class CoverageMappings(
-        val functionMappings: List<FunctionMapping>
+        val functionMappings: List<FunctionMapping>,
+        val fileIdMapping: IntArray
 )
 
 internal class CoverageMappingsBuilder {
 
     private val toCover = mutableMapOf<IrFile, MutableList<IrFunction>>()
 
-    // TODO: #coverage Store file id as integer.
+    // Position in list is represents file's id.
+    // TODO: It can be simplified.
+    private val fileIdMapping = mutableListOf<IrFile>()
+
     fun collect(file: IrFile, irFunction: IrFunction) {
         if (file !in toCover) {
             toCover[file] = mutableListOf()
+            fileIdMapping += file
         }
         toCover.getValue(file).add(irFunction)
     }
 
-    fun build(): CoverageMappings =
-        toCover.flatMap { (file, functions) -> functions.map { file to it} }
-            .map { (file, function) ->
-                val regions = collectFunctionRegions(file, function)
-                FunctionMapping(file.name, function.functionName, regions)
-            }
-            .filter { it.regions.isEmpty() }
-            .let {
-                CoverageMappings(it)
-            }
+    fun build(): CoverageMappings {
+        val fileIdMapping = toCover.keys.mapIndexed { index, irFile -> irFile to index }.toMap()
+        return toCover.flatMap { (file, functions) -> functions.map { file to it} }
+                .map { (file, function) ->
+                    val regions = collectFunctionRegions(file, function)
+                    // TODO: use global hash instead
+                    // TODO: Ids of the inline functions
+                    FunctionMapping(IntArray(fileIdMapping.getValue(file)), file.name, function.functionName, regions, function.name.localHash.value)
+                }
+                .filter { it.regions.isEmpty() }
+                .let {
+                    CoverageMappings(it, fileIdMapping.values.toIntArray())
+                }
+    }
 
     private fun collectFunctionRegions(file: IrFile, irFunction: IrFunction): List<SourceMappingRegion> =
         irFunction.body?.let { body ->
-            val coverageVisitor = CoverageVisitor(file)
+            val coverageVisitor = CoverageVisitor(file, fileIdMapping.indexOf(file))
             body.acceptVoid(coverageVisitor)
             coverageVisitor.regionStack
         } ?: emptyList()
 
     // TODO: #coverage extend to other IrElements
     // TODO: #coverage What if we meet nested function?
-    private class CoverageVisitor(val file: IrFile) : IrElementVisitorVoidWithContext() {
+    private class CoverageVisitor(val file: IrFile, val fileId: Int) : IrElementVisitorVoidWithContext() {
 
         val regionStack = mutableListOf<SourceMappingRegion>()
 
@@ -76,6 +90,7 @@ internal class CoverageMappingsBuilder {
         override fun visitBody(body: IrBody) {
 
             regionStack.push(SourceMappingRegion(
+                    fileId,
                     file.fileEntry.line(body.startOffset),
                     file.fileEntry.column(body.startOffset),
                     file.fileEntry.line(body.endOffset),
@@ -101,8 +116,31 @@ internal class PrintCoverageMappingsWriter : CoverageMappingsWriter {
 }
 
 internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappingsWriter {
+
+    val functionRecords = mutableListOf<LLVMValueRef>()
+
     override fun write(coverageMappings: CoverageMappings) {
         val module = context.llvmModule ?: error("LLVM module should be initialized")
+
+        val functionRecords = coverageMappings.functionMappings.map(this::addFunctionMappingRecord)
     }
+
+    private fun addFunctionMappingRecord(functionMapping: FunctionMapping): LLVMValueRef {
+        val regions = functionMapping.let(this::makeFunctionCounterMapping)
+        val cv = regions.toCValues()
+        val fileIds = functionMapping.fileIds.toCValues()
+        val coverageMapping = (LLVMWriteCoverageRegionMapping(fileIds, fileIds.size.signExtend(), cv, cv.size.signExtend())?.toKString()
+                ?: error("Cannot write coverage region mapping"))
+        return LLVMAddFunctionMappingRecord(LLVMGetModuleContext(context.llvmModule), functionMapping.function, functionMapping.hash, coverageMapping)!!
+    }
+
+    private fun makeFunctionCounterMapping(functionMapping: FunctionMapping): List<LLVMCounterMappingRegionRef?> {
+        val regions = functionMapping.regions.map { region ->
+            val (fileId, startLine, startColumn, endLine, endColumn) = region
+            LLVMCounterMappingMakeRegion(fileId, startLine, startColumn, endLine, endColumn)
+        }
+        return regions
+    }
+
 }
 

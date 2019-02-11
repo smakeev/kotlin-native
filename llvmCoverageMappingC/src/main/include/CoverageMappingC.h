@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef __DEBUG_INFO_C_H__
-# define __DEBUG_INFO_C_H__
+#ifndef __COVERAGE_MAPPING_C_H__
+# define __COVERAGE_MAPPING_C_H__
 #include <llvm-c/Core.h>
-#include <llvm/ProfileData/Coverage/CoverageMapping.h>
 # ifdef __cplusplus
 extern "C" {
 # endif
 
-typedef struct llvm::coverage::CounterMappingRegion *LLVMCounterMappingRegionRef;
+typedef struct CounterMappingRegion *LLVMCounterMappingRegionRef;
 
-typedef struct llvm::coverage::Counter LLVMCounter;
+typedef struct Counter *LLVMCounterRef;
 
 LLVMCounterMappingRegionRef LLVMCounterMappingMakeRegion(int fileId, int lineStart, int columnStart, int lineEnd, int columnEnd);
+
+LLVMValueRef LLVMAddFunctionMappingRecord(LLVMContextRef context, const char* name, uint64_t hash, const char* coverageMapping);
+
+const char* LLVMWriteCoverageRegionMapping(unsigned int* fileIdMapping, size_t fileIdMappingSize, LLVMCounterMappingRegionRef* mappingRegions, size_t mappingRegionsSize);
 
 # ifdef __cplusplus
 }

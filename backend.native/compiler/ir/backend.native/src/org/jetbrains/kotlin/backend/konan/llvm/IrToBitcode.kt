@@ -317,7 +317,7 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
 
             val coverageMappings = context.coverageMappingsBuilder.build()
 
-            PrintCoverageMappingsWriter().write(coverageMappings)
+            LLVMCoverageMappingsWriter(context).write(coverageMappings)
         }
 
         declaration.acceptChildrenVoid(this)

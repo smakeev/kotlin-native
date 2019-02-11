@@ -18,19 +18,67 @@
 
 #include "CoverageMappingC.h"
 
+#include <llvm/ProfileData/Coverage/CoverageMapping.h>
+#include <llvm/ProfileData/Coverage/CoverageMappingWriter.h>
+#include <llvm/IR/GlobalVariable.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Constants.h>
+#include <string>
+#include <vector>
+
 using namespace llvm;
 using namespace llvm::coverage;
 
 namespace llvm {
-    DEFINE_SIMPLE_CONVERSION_FUNCTIONS(CounterMappingRegion, LLVMCounterMappingRegionRef)
+    DEFINE_SIMPLE_CONVERSION_FUNCTIONS(coverage::CounterMappingRegion, LLVMCounterMappingRegionRef)
 }
-
-extern "C" {
 
 LLVMCounterMappingRegionRef
 LLVMCounterMappingMakeRegion(int fileId, int lineStart, int columnStart, int lineEnd, int columnEnd) {
-    return llvm::wrap(new CounterMappingRegion(Counter(), fileId, 0, lineStart, columnStart, lineEnd, columnEnd,
-                                               CounterMappingRegion::RegionKind::CodeRegion));
+    auto regionKind = llvm::coverage::CounterMappingRegion::RegionKind::CodeRegion;
+    const auto &counter = llvm::coverage::Counter();
+    return llvm::wrap(new llvm::coverage::CounterMappingRegion(counter, fileId, 0, lineStart, columnStart, lineEnd, columnEnd, regionKind));
 }
 
+const char *LLVMWriteCoverageRegionMapping(unsigned int *fileIdMapping, size_t fileIdMappingSize,
+                                           LLVMCounterMappingRegionRef *mappingRegions, size_t mappingRegionsSize) {
+
+    std::vector<coverage::CounterMappingRegion> mrv;
+    for (size_t i = 0; i < mappingRegionsSize; ++i) {
+        mrv.emplace_back(*(llvm::unwrap(mappingRegions[i])));
+    }
+
+    MutableArrayRef<llvm::coverage::CounterMappingRegion> mra(mrv);
+    CoverageMappingWriter writer(ArrayRef<unsigned int>(fileIdMapping, fileIdMappingSize), None, mra);
+    std::string CoverageMapping;
+    llvm::raw_string_ostream OS(CoverageMapping);
+    writer.write(OS);
+    dbgs() << "Coverage mapping: " << CoverageMapping << "\n";
+    return CoverageMapping.c_str();
 }
+
+static llvm::Constant * addFunctionMappingRecord(llvm::LLVMContext &Ctx, StringRef NameValue, uint64_t FuncHash, const std::string &CoverageMapping) {
+#define COVMAP_FUNC_RECORD(Type, LLVMType, Name, Init) LLVMType,
+    llvm::Type *FunctionRecordTypes[] = {
+#include "llvm/ProfileData/InstrProfData.inc"
+    };
+    llvm::StructType* FunctionRecordTy = llvm::StructType::get(Ctx, makeArrayRef(FunctionRecordTypes), /*isPacked=*/true);
+
+#define COVMAP_FUNC_RECORD(Type, LLVMType, Name, Init) Init,
+    llvm::Constant *FunctionRecordVals[] = {
+#include "llvm/ProfileData/InstrProfData.inc"
+    };
+    return llvm::ConstantStruct::get(FunctionRecordTy, makeArrayRef(FunctionRecordVals));
+}
+
+LLVMValueRef
+LLVMAddFunctionMappingRecord(LLVMContextRef context, const char *name, uint64_t hash, const char *coverageMapping) {
+    return llvm::wrap(addFunctionMappingRecord(*llvm::unwrap(context), name, hash, coverageMapping));
+}
+
+
+
+
