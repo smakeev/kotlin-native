@@ -14,9 +14,23 @@
  * limitations under the License.
  */
 
+#include <CoverageMappingC.h>
+
 #include "CoverageMappingC.h"
+
+using namespace llvm;
+using namespace llvm::coverage;
+
+namespace llvm {
+    DEFINE_SIMPLE_CONVERSION_FUNCTIONS(CounterMappingRegion, LLVMCounterMappingRegionRef)
+}
 
 extern "C" {
 
-} /* extern "C" */
+LLVMCounterMappingRegionRef
+LLVMCounterMappingMakeRegion(int fileId, int lineStart, int columnStart, int lineEnd, int columnEnd) {
+    return llvm::wrap(new CounterMappingRegion(Counter(), fileId, 0, lineStart, columnStart, lineEnd, columnEnd,
+                                               CounterMappingRegion::RegionKind::CodeRegion));
+}
 
+}

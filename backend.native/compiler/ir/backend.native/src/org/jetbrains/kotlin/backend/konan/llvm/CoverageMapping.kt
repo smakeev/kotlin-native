@@ -103,8 +103,6 @@ internal class PrintCoverageMappingsWriter : CoverageMappingsWriter {
 internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappingsWriter {
     override fun write(coverageMappings: CoverageMappings) {
         val module = context.llvmModule ?: error("LLVM module should be initialized")
-
-
     }
 }
 

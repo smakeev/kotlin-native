@@ -17,11 +17,16 @@
 #ifndef __DEBUG_INFO_C_H__
 # define __DEBUG_INFO_C_H__
 #include <llvm-c/Core.h>
+#include <llvm/ProfileData/Coverage/CoverageMapping.h>
 # ifdef __cplusplus
 extern "C" {
 # endif
 
+typedef struct llvm::coverage::CounterMappingRegion *LLVMCounterMappingRegionRef;
 
+typedef struct llvm::coverage::Counter LLVMCounter;
+
+LLVMCounterMappingRegionRef LLVMCounterMappingMakeRegion(int fileId, int lineStart, int columnStart, int lineEnd, int columnEnd);
 
 # ifdef __cplusplus
 }
