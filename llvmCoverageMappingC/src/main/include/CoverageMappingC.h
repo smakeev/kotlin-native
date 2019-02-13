@@ -31,6 +31,8 @@ LLVMValueRef LLVMAddFunctionMappingRecord(LLVMContextRef context, const char* na
 
 const char* LLVMWriteCoverageRegionMapping(unsigned int* fileIdMapping, size_t fileIdMappingSize, LLVMCounterMappingRegionRef* mappingRegions, size_t mappingRegionsSize);
 
+LLVMValueRef LLVMCoverageEmit(LLVMContextRef context, LLVMModuleRef module);
+
 # ifdef __cplusplus
 }
 # endif

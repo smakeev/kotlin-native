@@ -23,9 +23,12 @@
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Path.h>
 #include <string>
 #include <vector>
 
@@ -40,7 +43,9 @@ LLVMCounterMappingRegionRef
 LLVMCounterMappingMakeRegion(int fileId, int lineStart, int columnStart, int lineEnd, int columnEnd) {
     auto regionKind = llvm::coverage::CounterMappingRegion::RegionKind::CodeRegion;
     const auto &counter = llvm::coverage::Counter();
-    return llvm::wrap(new llvm::coverage::CounterMappingRegion(counter, fileId, 0, lineStart, columnStart, lineEnd, columnEnd, regionKind));
+    return llvm::wrap(
+            new llvm::coverage::CounterMappingRegion(counter, fileId, 0, lineStart, columnStart, lineEnd, columnEnd,
+                                                     regionKind));
 }
 
 const char *LLVMWriteCoverageRegionMapping(unsigned int *fileIdMapping, size_t fileIdMappingSize,
@@ -56,16 +61,23 @@ const char *LLVMWriteCoverageRegionMapping(unsigned int *fileIdMapping, size_t f
     std::string CoverageMapping;
     llvm::raw_string_ostream OS(CoverageMapping);
     writer.write(OS);
-    dbgs() << "Coverage mapping: " << CoverageMapping << "\n";
     return CoverageMapping.c_str();
 }
 
-static llvm::Constant * addFunctionMappingRecord(llvm::LLVMContext &Ctx, StringRef NameValue, uint64_t FuncHash, const std::string &CoverageMapping) {
+static llvm::StructType* getFunctionRecordTy(llvm::LLVMContext &Ctx) {
 #define COVMAP_FUNC_RECORD(Type, LLVMType, Name, Init) LLVMType,
     llvm::Type *FunctionRecordTypes[] = {
 #include "llvm/ProfileData/InstrProfData.inc"
     };
-    llvm::StructType* FunctionRecordTy = llvm::StructType::get(Ctx, makeArrayRef(FunctionRecordTypes), /*isPacked=*/true);
+    llvm::StructType *FunctionRecordTy = llvm::StructType::get(Ctx, makeArrayRef(FunctionRecordTypes), /*isPacked=*/
+                                                               true);
+    
+    return FunctionRecordTy;
+}
+
+static llvm::Constant *addFunctionMappingRecord(llvm::LLVMContext &Ctx, StringRef NameValue, uint64_t FuncHash,
+                                                const std::string &CoverageMapping) {
+    llvm::StructType *FunctionRecordTy = getFunctionRecordTy(Ctx);
 
 #define COVMAP_FUNC_RECORD(Type, LLVMType, Name, Init) Init,
     llvm::Constant *FunctionRecordVals[] = {
@@ -79,10 +91,21 @@ LLVMAddFunctionMappingRecord(LLVMContextRef context, const char *name, uint64_t 
     return llvm::wrap(addFunctionMappingRecord(*llvm::unwrap(context), name, hash, coverageMapping));
 }
 
-static void emit() {
-    if (FunctionRecords.empty())
-        return;
-    llvm::LLVMContext &Ctx = CGM.getLLVMContext();
+static std::string normalizeFilename(StringRef Filename) {
+    llvm::SmallString<256> Path(Filename);
+    llvm::sys::fs::make_absolute(Path);
+    llvm::sys::path::remove_dots(Path, true);
+    return Path.str().str();
+}
+
+static llvm::GlobalVariable *emitCoverageGlobal(
+        llvm::LLVMContext &Ctx,
+        llvm::Module &module,
+        std::vector<llvm::Constant *> &FunctionRecords,
+        std::vector<llvm::Constant *> &FunctionNames,
+        llvm::SmallDenseMap<const char *, unsigned, 8> &FileEntries,
+        std::vector<std::string> &CoverageMappings,
+        llvm::StructType *FunctionRecordTy) {
     auto *Int32Ty = llvm::Type::getInt32Ty(Ctx);
 
     // Create the filenames and merge them with coverage mappings
@@ -92,7 +115,7 @@ static void emit() {
     FilenameRefs.resize(FileEntries.size());
     for (const auto &Entry : FileEntries) {
         auto I = Entry.second;
-        FilenameStrs[I] = normalizeFilename(Entry.first->getName());
+        FilenameStrs[I] = normalizeFilename(Entry.first);
         FilenameRefs[I] = FilenameStrs[I];
     }
 
@@ -121,12 +144,14 @@ static void emit() {
 
     llvm::Type *CovDataHeaderTypes[] = {
 #define COVMAP_HEADER(Type, LLVMType, Name, Init) LLVMType,
+
 #include "llvm/ProfileData/InstrProfData.inc"
     };
     auto CovDataHeaderTy =
             llvm::StructType::get(Ctx, makeArrayRef(CovDataHeaderTypes));
     llvm::Constant *CovDataHeaderVals[] = {
 #define COVMAP_HEADER(Type, LLVMType, Name, Init) Init,
+
 #include "llvm/ProfileData/InstrProfData.inc"
     };
     auto CovDataHeaderVal = llvm::ConstantStruct::get(
@@ -141,27 +166,47 @@ static void emit() {
     auto CovDataVal =
             llvm::ConstantStruct::get(CovDataTy, makeArrayRef(TUDataVals));
     auto CovData = new llvm::GlobalVariable(
-            CGM.getModule(), CovDataTy, true, llvm::GlobalValue::InternalLinkage,
+            module, CovDataTy, true, llvm::GlobalValue::InternalLinkage,
             CovDataVal, llvm::getCoverageMappingVarName());
 
-    CovData->setSection(getCoverageSection(CGM));
-    CovData->setAlignment(8);
+    return CovData;
 
-    // Make sure the data doesn't get deleted.
-    CGM.addUsedGlobal(CovData);
-    // Create the deferred function records array
-    if (!FunctionNames.empty()) {
-        auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx),
-                                               FunctionNames.size());
-        auto NamesArrVal = llvm::ConstantArray::get(NamesArrTy, FunctionNames);
-        // This variable will *NOT* be emitted to the object file. It is used
-        // to pass the list of names referenced to codegen.
-        new llvm::GlobalVariable(CGM.getModule(), NamesArrTy, true,
-                                 llvm::GlobalValue::InternalLinkage, NamesArrVal,
-                                 llvm::getCoverageUnusedNamesVarName());
-    }
+//    CovData->setSection(getCoverageSection(CGM));
+//    CovData->setAlignment(8);
+//
+//    // Make sure the data doesn't get deleted.
+//    CGM.addUsedGlobal(CovData);
+//    // Create the deferred function records array
+//    if (!FunctionNames.empty()) {
+//        auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx),
+//                                               FunctionNames.size());
+//        auto NamesArrVal = llvm::ConstantArray::get(NamesArrTy, FunctionNames);
+//        // This variable will *NOT* be emitted to the object file. It is used
+//        // to pass the list of names referenced to codegen.
+//        new llvm::GlobalVariable(module, NamesArrTy, true,
+//                                 llvm::GlobalValue::InternalLinkage, NamesArrVal,
+//                                 llvm::getCoverageUnusedNamesVarName());
+//    }
 }
 
+
+LLVMValueRef LLVMCoverageEmit(LLVMContextRef context, LLVMModuleRef module) {
+    LLVMContext &Ctx = *llvm::unwrap(context);
+    std::vector<llvm::Constant *> FunctionRecords;
+    std::vector<llvm::Constant *> FunctionNames;
+    llvm::SmallDenseMap<const char *, unsigned, 8> FileEntries;
+    std::vector<std::string> CoverageMappings;
+    llvm::StructType *FunctionRecordTy = getFunctionRecordTy(Ctx);
+    return llvm::wrap(emitCoverageGlobal(
+            Ctx,
+            *llvm::unwrap(module),
+            FunctionRecords,
+            FunctionNames,
+            FileEntries,
+            CoverageMappings,
+            FunctionRecordTy
+    ));
+}
 
 
 
