@@ -39,6 +39,9 @@ LLVMValueRef LLVMCoverageEmit(
 
 const char* LLVMCoverageGetCoverageSection(LLVMModuleRef moduleRef);
 
+void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef moduleRef,
+                                        LLVMValueRef * functionNames, size_t functionNamesSize);
+
 # ifdef __cplusplus
 }
 # endif

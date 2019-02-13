@@ -169,7 +169,7 @@ static llvm::GlobalVariable *emitCoverageGlobal(
 
     return CovData;
 
-
+//
 //    // Create the deferred function records array
 //    if (!FunctionNames.empty()) {
 //        auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx),
@@ -223,6 +223,25 @@ LLVMValueRef LLVMCoverageEmit(
             RawCoverageMappings,
             FunctionRecordTy
     ));
+}
+
+void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef moduleRef,
+        LLVMValueRef * functionNames, size_t functionNamesSize) {
+    LLVMContext &Ctx = *llvm::unwrap(context);
+    Module &module = *llvm::unwrap(moduleRef);
+
+    std::vector<Constant *> FunctionNames;
+    for (size_t i = 0; i < functionNamesSize; ++i) {
+        FunctionNames.push_back(llvm::dyn_cast_or_null<Constant>(llvm::unwrap(functionNames[i]));
+    }
+
+    auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx), functionNamesSize);
+    auto NamesArrVal = llvm::ConstantArray::get(NamesArrTy, FunctionNames);
+    // This variable will *NOT* be emitted to the object file. It is used
+    // to pass the list of names referenced to codegen.
+    new llvm::GlobalVariable(module, NamesArrTy, true,
+                             llvm::GlobalValue::InternalLinkage, NamesArrVal,
+                             llvm::getCoverageUnusedNamesVarName());
 }
 
 
