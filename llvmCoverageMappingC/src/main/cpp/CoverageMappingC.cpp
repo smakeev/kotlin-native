@@ -22,6 +22,7 @@
 #include <llvm/ProfileData/Coverage/CoverageMappingWriter.h>
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
@@ -102,9 +103,8 @@ static llvm::GlobalVariable *emitCoverageGlobal(
         llvm::LLVMContext &Ctx,
         llvm::Module &module,
         std::vector<llvm::Constant *> &FunctionRecords,
-        std::vector<llvm::Constant *> &FunctionNames,
         llvm::SmallDenseMap<const char *, unsigned, 8> &FileEntries,
-        std::vector<std::string> &CoverageMappings,
+        std::string& RawCoverageMappings,
         llvm::StructType *FunctionRecordTy) {
     auto *Int32Ty = llvm::Type::getInt32Ty(Ctx);
 
@@ -122,8 +122,6 @@ static llvm::GlobalVariable *emitCoverageGlobal(
     std::string FilenamesAndCoverageMappings;
     llvm::raw_string_ostream OS(FilenamesAndCoverageMappings);
     CoverageFilenamesSectionWriter(FilenameRefs).write(OS);
-    std::string RawCoverageMappings =
-            llvm::join(CoverageMappings.begin(), CoverageMappings.end(), "");
     OS << RawCoverageMappings;
     size_t CoverageMappingSize = RawCoverageMappings.size();
     size_t FilenamesSize = OS.str().size() - CoverageMappingSize;
@@ -171,11 +169,7 @@ static llvm::GlobalVariable *emitCoverageGlobal(
 
     return CovData;
 
-//    CovData->setSection(getCoverageSection(CGM));
-//    CovData->setAlignment(8);
-//
-//    // Make sure the data doesn't get deleted.
-//    CGM.addUsedGlobal(CovData);
+
 //    // Create the deferred function records array
 //    if (!FunctionNames.empty()) {
 //        auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx),
@@ -189,21 +183,44 @@ static llvm::GlobalVariable *emitCoverageGlobal(
 //    }
 }
 
+const char* LLVMCoverageGetCoverageSection(LLVMModuleRef moduleRef) {
+    Module &module = *llvm::unwrap(moduleRef);
+    return llvm::getInstrProfSectionName(
+            llvm::IPSK_covmap,
+            Triple(module.getTargetTriple()).getObjectFormat()).c_str();
+}
 
-LLVMValueRef LLVMCoverageEmit(LLVMContextRef context, LLVMModuleRef module) {
+
+// TODO: Ugly as the ugliest place in hell.
+LLVMValueRef LLVMCoverageEmit(
+        LLVMContextRef context, LLVMModuleRef moduleRef,
+        LLVMValueRef* records, size_t recordsSize,
+        const char** filenames, int* fileIds, size_t filenamesSize,
+        const char** covMappings, size_t covMappingsSize) {
     LLVMContext &Ctx = *llvm::unwrap(context);
-    std::vector<llvm::Constant *> FunctionRecords;
-    std::vector<llvm::Constant *> FunctionNames;
+    Module &module = *llvm::unwrap(moduleRef);
+
+    std::vector<Constant *> FunctionRecords;
+    for (size_t i = 0; i < recordsSize; ++i) {
+        auto *x = llvm::dyn_cast_or_null<Constant>(llvm::unwrap(records[i]));
+        FunctionRecords.push_back(x);
+    }
     llvm::SmallDenseMap<const char *, unsigned, 8> FileEntries;
+    for (size_t i = 0; i < filenamesSize; ++i) {
+        FileEntries.insert(std::make_pair(filenames[i], fileIds[i]));
+    }
     std::vector<std::string> CoverageMappings;
+    for (size_t i = 0; i < covMappingsSize; ++i) {
+        CoverageMappings.emplace_back(covMappings[i]);
+    }
     llvm::StructType *FunctionRecordTy = getFunctionRecordTy(Ctx);
+    std::string RawCoverageMappings = llvm::join(CoverageMappings.begin(), CoverageMappings.end(), "");
     return llvm::wrap(emitCoverageGlobal(
             Ctx,
-            *llvm::unwrap(module),
+            module,
             FunctionRecords,
-            FunctionNames,
             FileEntries,
-            CoverageMappings,
+            RawCoverageMappings,
             FunctionRecordTy
     ));
 }

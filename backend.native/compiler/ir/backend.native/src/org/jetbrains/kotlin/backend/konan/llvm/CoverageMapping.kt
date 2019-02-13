@@ -36,7 +36,7 @@ internal class FunctionMapping(
 
 internal class CoverageMappings(
         val functionMappings: List<FunctionMapping>,
-        val fileIdMapping: IntArray
+        val fileIdMapping: List<IrFile>
 )
 
 internal class CoverageMappingsBuilder {
@@ -56,26 +56,25 @@ internal class CoverageMappingsBuilder {
     }
 
     fun build(): CoverageMappings {
-        val fileIdMapping = toCover.keys.mapIndexed { index, irFile -> irFile to index }.toMap()
-        return toCover.flatMap { (file, functions) -> functions.map { file to it} }
+        return toCover.flatMap { (file, functions) -> functions.map { file to it } }
                 .map { (file, function) ->
                     val regions = collectFunctionRegions(file, function)
                     // TODO: use global hash instead
                     // TODO: Ids of the inline functions
-                    FunctionMapping(IntArray(fileIdMapping.getValue(file)), file.name, function.functionName, regions, function.name.localHash.value)
+                    FunctionMapping(IntArray(fileIdMapping.indexOf(file)), file.name, function.functionName, regions, function.name.localHash.value)
                 }
                 .filter { it.regions.isEmpty() }
                 .let {
-                    CoverageMappings(it, fileIdMapping.values.toIntArray())
+                    CoverageMappings(it, fileIdMapping)
                 }
     }
 
     private fun collectFunctionRegions(file: IrFile, irFunction: IrFunction): List<SourceMappingRegion> =
-        irFunction.body?.let { body ->
-            val coverageVisitor = CoverageVisitor(file, fileIdMapping.indexOf(file))
-            body.acceptVoid(coverageVisitor)
-            coverageVisitor.regionStack
-        } ?: emptyList()
+            irFunction.body?.let { body ->
+                val coverageVisitor = CoverageVisitor(file, fileIdMapping.indexOf(file))
+                body.acceptVoid(coverageVisitor)
+                coverageVisitor.regionStack
+            } ?: emptyList()
 
     // TODO: #coverage extend to other IrElements
     // TODO: #coverage What if we meet nested function?
@@ -117,12 +116,28 @@ internal class PrintCoverageMappingsWriter : CoverageMappingsWriter {
 
 internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappingsWriter {
 
-    val functionRecords = mutableListOf<LLVMValueRef>()
+    private val zzz = mutableListOf<String>()
 
     override fun write(coverageMappings: CoverageMappings) {
-        val module = context.llvmModule ?: error("LLVM module should be initialized")
+        val module = context.llvmModule
+                ?: error("LLVM module should be initialized")
 
         val functionRecords = coverageMappings.functionMappings.map(this::addFunctionMappingRecord)
+
+        val filenames = coverageMappings.fileIdMapping.map { it.name }
+        val fileIds = IntArray(coverageMappings.fileIdMapping.size) { it }
+
+        val coverageGlobal = memScoped {
+            LLVMCoverageEmit(LLVMGetModuleContext(module), module,
+                    functionRecords.toCValues(), functionRecords.size.signExtend(),
+                    filenames.toCStringArray(this), fileIds.toCValues(), fileIds.size.signExtend(),
+                    zzz.toCStringArray(this), zzz.size.signExtend()
+            )!!
+        }
+        val section = LLVMCoverageGetCoverageSection(module)!!.toKString()
+        LLVMSetSection(coverageGlobal, section)
+        LLVMSetAlignment(coverageGlobal, 8)
+        context.llvm.usedGlobals.add(coverageGlobal)
     }
 
     private fun addFunctionMappingRecord(functionMapping: FunctionMapping): LLVMValueRef {
@@ -131,6 +146,7 @@ internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappin
         val fileIds = functionMapping.fileIds.toCValues()
         val coverageMapping = (LLVMWriteCoverageRegionMapping(fileIds, fileIds.size.signExtend(), cv, cv.size.signExtend())?.toKString()
                 ?: error("Cannot write coverage region mapping"))
+        zzz += coverageMapping
         return LLVMAddFunctionMappingRecord(LLVMGetModuleContext(context.llvmModule), functionMapping.function, functionMapping.hash, coverageMapping)!!
     }
 
