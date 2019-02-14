@@ -232,7 +232,7 @@ void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef mo
 
     std::vector<Constant *> FunctionNames;
     for (size_t i = 0; i < functionNamesSize; ++i) {
-        FunctionNames.push_back(llvm::dyn_cast_or_null<Constant>(llvm::unwrap(functionNames[i]));
+        FunctionNames.push_back(llvm::dyn_cast_or_null<Constant>(llvm::unwrap(functionNames[i])));
     }
 
     auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx), functionNamesSize);
