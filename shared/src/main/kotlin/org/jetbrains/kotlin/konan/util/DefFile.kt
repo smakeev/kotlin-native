@@ -29,7 +29,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
     }
     class DefFileConfig(private val properties: Properties) {
         val headers by lazy {
-            properties.getSpaceSeparated("headers")
+            properties.getCommandlineArgumentsSeparated("headers")
         }
 
         val modules by lazy {
@@ -41,7 +41,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val compilerOpts by lazy {
-            properties.getSpaceSeparated("compilerOpts")
+            properties.getCommandlineArgumentsSeparated("compilerOpts")
         }
 
         val excludeSystemLibs by lazy {
@@ -57,7 +57,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val linkerOpts by lazy {
-            properties.getSpaceSeparated("linkerOpts")
+            properties.getCommandlineArgumentsSeparated("linkerOpts")
         }
 
         val linker by lazy {
@@ -73,11 +73,11 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val staticLibraries by lazy {
-            properties.getSpaceSeparated("staticLibraries")
+            properties.getCommandlineArgumentsSeparated("staticLibraries")
         }
 
         val libraryPaths by lazy {
-            properties.getSpaceSeparated("libraryPaths")
+            properties.getCommandlineArgumentsSeparated("libraryPaths")
         }
 
         val packageName by lazy {
@@ -112,6 +112,37 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
             properties.getProperty("disableDesignatedInitializerChecks")?.toBoolean() ?: false
         }
     }
+}
+
+private fun Properties.getCommandlineArgumentsSeparated(name: String): List<String> {
+    //inspired by IntelliJ IDEA code (Apache 2.0 by JetBrains)
+    //com.intellij.openapi.util.text.StringUtilRt#splitHonorQuotes
+    val s = getProperty(name) ?: return listOf()
+
+    val result = mutableListOf<String>()
+    val builder = StringBuilder(s.length)
+
+    var inQuotes = false
+    for (i in 0 until s.length) {
+        val c = s[i]
+        if (c == ' ' && !inQuotes) {
+            if (builder.isNotEmpty()) {
+                result.add(builder.toString())
+                builder.setLength(0)
+            }
+            continue
+        }
+        if ((c == '"' || c == '\'') && !(i > 0 && s[i - 1] == '\\')) {
+            inQuotes = !inQuotes
+        }
+        builder.append(c)
+    }
+
+    if (builder.isNotEmpty()) {
+        result.add(builder.toString())
+    }
+
+    return result
 }
 
 private fun Properties.getSpaceSeparated(name: String): List<String> {
