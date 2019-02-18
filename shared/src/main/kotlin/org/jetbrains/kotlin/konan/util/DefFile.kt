@@ -115,34 +115,8 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
 }
 
 private fun Properties.getCommandlineArgumentsSeparated(name: String): List<String> {
-    //inspired by IntelliJ IDEA code (Apache 2.0 by JetBrains)
-    //com.intellij.openapi.util.text.StringUtilRt#splitHonorQuotes
     val s = getProperty(name) ?: return listOf()
-
-    val result = mutableListOf<String>()
-    val builder = StringBuilder(s.length)
-
-    var inQuotes = false
-    for (i in 0 until s.length) {
-        val c = s[i]
-        if (c == ' ' && !inQuotes) {
-            if (builder.isNotEmpty()) {
-                result.add(builder.toString())
-                builder.setLength(0)
-            }
-            continue
-        }
-        if ((c == '"' || c == '\'') && !(i > 0 && s[i - 1] == '\\')) {
-            inQuotes = !inQuotes
-        }
-        builder.append(c)
-    }
-
-    if (builder.isNotEmpty()) {
-        result.add(builder.toString())
-    }
-
-    return result
+    return parseCommandLineString(s)
 }
 
 private fun Properties.getSpaceSeparated(name: String): List<String> {

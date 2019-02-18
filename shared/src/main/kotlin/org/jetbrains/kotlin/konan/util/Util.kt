@@ -59,3 +59,34 @@ fun String.removeSuffixIfPresent(suffix: String) =
     if (this.endsWith(suffix)) this.dropLast(suffix.length) else this
 
 fun <T> Lazy<T>.getValueOrNull(): T? = if (isInitialized()) value else null
+
+
+fun parseCommandLineString(cmdString: String): List<String> {
+    //inspired by IntelliJ IDEA source code (Apache 2.0 by JetBrains)
+    //com.intellij.openapi.util.text.StringUtilRt#splitHonorQuotes
+
+    val result = mutableListOf<String>()
+    val builder = StringBuilder(cmdString.length)
+
+    var inQuotes = false
+    for (i in 0 until cmdString.length) {
+        val c = cmdString[i]
+        if (c == ' ' && !inQuotes) {
+            if (builder.isNotEmpty()) {
+                result.add(builder.toString())
+                builder.setLength(0)
+            }
+            continue
+        }
+        if ((c == '"' || c == '\'') && !(i > 0 && cmdString[i - 1] == '\\')) {
+            inQuotes = !inQuotes
+        }
+        builder.append(c)
+    }
+
+    if (builder.isNotEmpty()) {
+        result.add(builder.toString())
+    }
+
+    return result
+}
