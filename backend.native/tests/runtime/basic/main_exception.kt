@@ -3,10 +3,12 @@
  * that can be found in the LICENSE file.
  */
 
-package runtime.basic.main_exception
-
 import kotlin.test.*
 
 @Test fun runTest() {
     throw Error("Hello!")
+}
+
+fun main(args : Array<String>) {
+   runTest()
 }
