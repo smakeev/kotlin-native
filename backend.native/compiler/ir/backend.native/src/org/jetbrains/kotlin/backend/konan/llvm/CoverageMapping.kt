@@ -99,6 +99,37 @@ internal class CoverageMappingsBuilder {
     }
 }
 
+internal class IrToCoverageRegionMapper (
+        override val context: Context,
+        val module: LLVMModuleRef,
+        function: IrFunction,
+        val callSitePlacer: (function: LLVMValueRef, args: List<LLVMValueRef>) -> Unit) : ContextUtils
+{
+
+    private val funcGlobal = getOrPutFunctionName(function)
+    private val hash = Int64(function.name.localHash.value).llvm
+
+    val map = mutableMapOf<IrElement, Int>()
+
+    fun placeRegionIncrement(irElement: IrElement) {
+        val numberOfRegions = Int32(2).llvm
+        val region = Int32(1).llvm
+        callSitePlacer(LLVMInstrProfIncrement(module)!!, listOf(funcGlobal, hash, numberOfRegions, region))
+    }
+
+    fun placeRegionIncrement(region: Int) {
+        val numberOfRegions = Int32(2).llvm
+        val region = Int32(region).llvm
+        callSitePlacer(LLVMInstrProfIncrement(module)!!, listOf(funcGlobal, hash, numberOfRegions, region))
+    }
+
+    private fun getOrPutFunctionName(function: IrFunction): LLVMValueRef {
+        val name = LLVMGetPGOFunctionName(function.llvmFunction)!!.toKString()
+        val x = LLVMCreatePGOFunctionNameVar(function.llvmFunction, name)!!
+        return LLVMConstBitCast(x, int8TypePtr)!!
+    }
+}
+
 internal interface CoverageMappingsWriter {
     fun write(coverageMappings: CoverageMappings)
 }

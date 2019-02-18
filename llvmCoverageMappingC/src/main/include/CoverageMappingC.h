@@ -42,6 +42,12 @@ const char* LLVMCoverageGetCoverageSection(LLVMModuleRef moduleRef);
 void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef moduleRef,
                                         LLVMValueRef * functionNames, size_t functionNamesSize);
 
+LLVMValueRef LLVMInstrProfIncrement(LLVMModuleRef moduleRef);
+
+const char* LLVMGetPGOFunctionName(LLVMValueRef llvmFunction);
+
+LLVMValueRef LLVMCreatePGOFunctionNameVar(LLVMValueRef llvmFunction, const char* pgoFunctionName);
+
 # ifdef __cplusplus
 }
 # endif

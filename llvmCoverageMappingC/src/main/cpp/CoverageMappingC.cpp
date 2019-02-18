@@ -28,6 +28,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
 #include <string>
@@ -242,6 +243,21 @@ void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef mo
     new llvm::GlobalVariable(module, NamesArrTy, true,
                              llvm::GlobalValue::InternalLinkage, NamesArrVal,
                              llvm::getCoverageUnusedNamesVarName());
+}
+
+LLVMValueRef LLVMInstrProfIncrement(LLVMModuleRef moduleRef) {
+    Module &module = *llvm::unwrap(moduleRef);
+    return llvm::wrap(llvm::Intrinsic::getDeclaration(&module, llvm::Intrinsic::instrprof_increment, None));
+}
+
+const char *LLVMGetPGOFunctionName(LLVMValueRef llvmFunction) {
+    auto *fnPtr = llvm::cast<llvm::Function>(llvm::unwrap(llvmFunction));
+    return llvm::getPGOFuncName(*fnPtr).c_str();
+}
+
+LLVMValueRef LLVMCreatePGOFunctionNameVar(LLVMValueRef llvmFunction, const char* pgoFunctionName) {
+    auto *fnPtr = llvm::cast<llvm::Function>(llvm::unwrap(llvmFunction));
+    return llvm::wrap(llvm::createPGOFuncNameVar(*fnPtr, pgoFunctionName));
 }
 
 
