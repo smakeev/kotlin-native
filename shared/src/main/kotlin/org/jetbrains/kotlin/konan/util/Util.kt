@@ -111,7 +111,9 @@ fun parseCommandLineString(cmdString: String): List<String> {
         }
         if ((c == '"' || c == '\'') && !(i > 0 && cmdString[i - 1] == '\\')) {
             inQuotes = !inQuotes
+            continue
         }
+
         builder.append(c)
     }
 
