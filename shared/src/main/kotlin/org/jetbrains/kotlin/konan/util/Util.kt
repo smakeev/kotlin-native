@@ -18,6 +18,7 @@ package org.jetbrains.kotlin.konan.util
 
 import kotlin.system.measureTimeMillis
 import org.jetbrains.kotlin.konan.file.*
+import java.util.*
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
@@ -119,4 +120,9 @@ fun parseCommandLineString(cmdString: String): List<String> {
     }
 
     return result
+}
+
+fun Properties.getParsedCommandLineString(name: String): List<String> {
+    val s = getProperty(name) ?: return listOf()
+    return parseCommandLineString(s)
 }

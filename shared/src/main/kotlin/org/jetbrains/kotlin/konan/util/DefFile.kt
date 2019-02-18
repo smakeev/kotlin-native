@@ -29,7 +29,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
     }
     class DefFileConfig(private val properties: Properties) {
         val headers by lazy {
-            properties.getCommandlineArgumentsSeparated("headers")
+            properties.getParsedCommandLineString("headers")
         }
 
         val modules by lazy {
@@ -41,7 +41,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val compilerOpts by lazy {
-            properties.getCommandlineArgumentsSeparated("compilerOpts")
+            properties.getParsedCommandLineString("compilerOpts")
         }
 
         val excludeSystemLibs by lazy {
@@ -57,7 +57,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val linkerOpts by lazy {
-            properties.getCommandlineArgumentsSeparated("linkerOpts")
+            properties.getParsedCommandLineString("linkerOpts")
         }
 
         val linker by lazy {
@@ -73,11 +73,11 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val staticLibraries by lazy {
-            properties.getCommandlineArgumentsSeparated("staticLibraries")
+            properties.getParsedCommandLineString("staticLibraries")
         }
 
         val libraryPaths by lazy {
-            properties.getCommandlineArgumentsSeparated("libraryPaths")
+            properties.getParsedCommandLineString("libraryPaths")
         }
 
         val packageName by lazy {
@@ -112,11 +112,6 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
             properties.getProperty("disableDesignatedInitializerChecks")?.toBoolean() ?: false
         }
     }
-}
-
-private fun Properties.getCommandlineArgumentsSeparated(name: String): List<String> {
-    val s = getProperty(name) ?: return listOf()
-    return parseCommandLineString(s)
 }
 
 private fun Properties.getSpaceSeparated(name: String): List<String> {
