@@ -17,6 +17,8 @@
 package org.jetbrains.kotlin.native.interop.tool
 
 import org.jetbrains.kotlin.cli.common.arguments.*
+import org.jetbrains.kotlin.konan.util.ARGUMENT_NO_DELIMITER
+import org.jetbrains.kotlin.konan.util.parseCommandLineString
 
 // TODO: unify camel and snake cases.
 // Possible solution is to accept both cases
@@ -64,11 +66,15 @@ class CInteropArguments : CommonInteropArguments() {
     @Argument(value = HEADER_FILTER_ADDITIONAL_SEARCH_PREFIX, shortName = "-hfasp",  valueDescription = "<file>", description = "header file to produce kotlin bindings for") 
     var headerFilterPrefix: Array<String> = arrayOf()
 
-    @Argument(value = "-compilerOpts", shortName = "-copt", valueDescription = "<arg>", description = "additional compiler options", delimiter = " ")
-    var compilerOpts: Array<String> = arrayOf()
+    @Argument(value = "-compilerOpts", shortName = "-copt", valueDescription = "<arg>", description = "additional compiler options", delimiter = ARGUMENT_NO_DELIMITER)
+    var compilerOptsInternal: Array<String> = arrayOf()
 
-    @Argument(value = "-linkerOpts", shortName = "-lopt", valueDescription = "<arg>", description = "additional linker options", delimiter = " ")
-    var linkerOpts: Array<String> = arrayOf()
+    val compilerOpts: Array<String> by parseCommandLineString { compilerOptsInternal }
+
+    @Argument(value = "-linkerOpts", shortName = "-lopt", valueDescription = "<arg>", description = "additional linker options", delimiter = ARGUMENT_NO_DELIMITER)
+    var linkerOptsInternal: Array<String> = arrayOf()
+
+    val linkerOpts: Array<String> by parseCommandLineString { linkerOptsInternal }
 
     @Argument(value = "-shims", description = "wrap bindings by a tracing layer") 
     var shims: Boolean = false
