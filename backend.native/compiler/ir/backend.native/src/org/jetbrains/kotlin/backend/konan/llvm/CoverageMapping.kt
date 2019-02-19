@@ -63,7 +63,7 @@ internal class CoverageMappingsBuilder {
                     // TODO: Ids of the inline functions
                     FunctionMapping(IntArray(fileIdMapping.indexOf(file)), file.name, function.symbolName, regions, function.symbolName.localHash.value)
                 }
-                .filter { it.regions.isEmpty() }
+                .filter { it.regions.isNotEmpty() }
                 .let {
                     CoverageMappings(it, fileIdMapping)
                 }
@@ -99,12 +99,11 @@ internal class CoverageMappingsBuilder {
     }
 }
 
-internal class IrToCoverageRegionMapper (
+internal class IrToCoverageRegionMapper(
         override val context: Context,
         val module: LLVMModuleRef,
         function: IrFunction,
-        val callSitePlacer: (function: LLVMValueRef, args: List<LLVMValueRef>) -> Unit) : ContextUtils
-{
+        val callSitePlacer: (function: LLVMValueRef, args: List<LLVMValueRef>) -> Unit) : ContextUtils {
 
     private val funcGlobal = getOrPutFunctionName(function)
     private val hash = Int64(function.symbolName.localHash.value).llvm
@@ -126,20 +125,9 @@ internal interface CoverageMappingsWriter {
     fun write(coverageMappings: CoverageMappings)
 }
 
-internal class PrintCoverageMappingsWriter : CoverageMappingsWriter {
-    override fun write(coverageMappings: CoverageMappings) {
-        coverageMappings.functionMappings.forEach {
-            println("${it.pathToFile} ${it.function}")
-            it.regions.forEachIndexed { index, region ->
-                println("$index: $region")
-            }
-        }
-    }
-}
-
 internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappingsWriter {
 
-    private val zzz = mutableListOf<String>()
+    private val covMaps = mutableListOf<String>()
 
     override fun write(coverageMappings: CoverageMappings) {
         val module = context.llvmModule
@@ -154,28 +142,28 @@ internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappin
             LLVMCoverageEmit(LLVMGetModuleContext(module), module,
                     functionRecords.toCValues(), functionRecords.size.signExtend(),
                     filenames.toCStringArray(this), fileIds.toCValues(), fileIds.size.signExtend(),
-                    zzz.toCStringArray(this), zzz.size.signExtend()
+                    this@LLVMCoverageMappingsWriter.covMaps.toCStringArray(this), this@LLVMCoverageMappingsWriter.covMaps.size.signExtend()
             )!!
         }
         context.llvm.usedGlobals.add(coverageGlobal)
     }
 
     private fun addFunctionMappingRecord(functionMapping: FunctionMapping): LLVMValueRef {
-        val regions = functionMapping.let(this::makeFunctionCounterMapping)
-        val cv = regions.toCValues()
-        val fileIds = functionMapping.fileIds.toCValues()
-        val coverageMapping = (LLVMWriteCoverageRegionMapping(fileIds, fileIds.size.signExtend(), cv, cv.size.signExtend())?.toKString()
-                ?: error("Cannot write coverage region mapping"))
-        zzz += coverageMapping
-        return LLVMAddFunctionMappingRecord(LLVMGetModuleContext(context.llvmModule), functionMapping.function, functionMapping.hash, coverageMapping)!!
-    }
-
-    private fun makeFunctionCounterMapping(functionMapping: FunctionMapping): List<LLVMCounterMappingRegionRef?> {
-        val regions = functionMapping.regions.map { region ->
-            val (fileId, startLine, startColumn, endLine, endColumn) = region
-            LLVMCounterMappingMakeRegion(fileId, startLine, startColumn, endLine, endColumn)
+        return memScoped {
+            val regions = functionMapping.regions.map { region ->
+                alloc<Region>().apply {
+                    fileId = region.fileId
+                    lineStart = region.startLine
+                    columnStart = region.startColumn
+                    lineEnd = region.endLine
+                    columnEnd = region.endColumn
+                }.ptr
+            }
+            val fileIds = functionMapping.fileIds.toCValues()
+            val coverageMapping = LLVMWriteCoverageRegionMapping(fileIds, fileIds.size.signExtend(), regions.toCValues(), regions.size.signExtend())!!.toKString()
+            covMaps += coverageMapping
+            LLVMAddFunctionMappingRecord(LLVMGetModuleContext(context.llvmModule), functionMapping.function, functionMapping.hash, coverageMapping)!!
         }
-        return regions
     }
 
 }

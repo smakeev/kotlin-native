@@ -21,23 +21,25 @@
 extern "C" {
 # endif
 
-typedef struct CounterMappingRegion *LLVMCounterMappingRegionRef;
+struct Region {
+    int fileId;
+    int lineStart;
+    int columnStart;
+    int lineEnd;
+    int columnEnd;
+};
 
 typedef struct Counter *LLVMCounterRef;
 
-LLVMCounterMappingRegionRef LLVMCounterMappingMakeRegion(int fileId, int lineStart, int columnStart, int lineEnd, int columnEnd);
-
 LLVMValueRef LLVMAddFunctionMappingRecord(LLVMContextRef context, const char* name, uint64_t hash, const char* coverageMapping);
 
-const char* LLVMWriteCoverageRegionMapping(unsigned int* fileIdMapping, size_t fileIdMappingSize, LLVMCounterMappingRegionRef* mappingRegions, size_t mappingRegionsSize);
+const char* LLVMWriteCoverageRegionMapping(unsigned int* fileIdMapping, size_t fileIdMappingSize, struct Region** mappingRegions, size_t mappingRegionsSize);
 
 LLVMValueRef LLVMCoverageEmit(
         LLVMContextRef context, LLVMModuleRef moduleRef,
         LLVMValueRef* records, size_t recordsSize,
         const char** filenames, int* fileIds, size_t filenamesSize,
         const char** covMappings, size_t covMappingsSize);
-
-const char* LLVMCoverageGetCoverageSection(LLVMModuleRef moduleRef);
 
 void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef moduleRef,
                                         LLVMValueRef * functionNames, size_t functionNamesSize);
