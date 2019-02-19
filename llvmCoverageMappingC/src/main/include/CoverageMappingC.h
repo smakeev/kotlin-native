@@ -16,7 +16,9 @@
 
 #ifndef __COVERAGE_MAPPING_C_H__
 # define __COVERAGE_MAPPING_C_H__
+
 #include <llvm-c/Core.h>
+
 # ifdef __cplusplus
 extern "C" {
 # endif
@@ -27,28 +29,38 @@ struct Region {
     int columnStart;
     int lineEnd;
     int columnEnd;
+    int counterId;
 };
 
-typedef struct Counter *LLVMCounterRef;
+typedef struct {
+    void *ptr;
+} LLVMCounterExpressionBuilderHandler;
 
-LLVMValueRef LLVMAddFunctionMappingRecord(LLVMContextRef context, const char* name, uint64_t hash, const char* coverageMapping);
+void LLVMBuilderAddCounters(LLVMCounterExpressionBuilderHandler handler, int firstCounterId, int secondCounterId);
 
-const char* LLVMWriteCoverageRegionMapping(unsigned int* fileIdMapping, size_t fileIdMappingSize, struct Region** mappingRegions, size_t mappingRegionsSize);
+LLVMCounterExpressionBuilderHandler LLVMCreateCounterExpressionBuilder();
+
+void LLVMDisposeCounterExpressionBuilder(LLVMCounterExpressionBuilderHandler handler);
+
+LLVMValueRef
+LLVMAddFunctionMappingRecord(LLVMContextRef context, const char *name, uint64_t hash, const char *coverageMapping);
+
+const char *LLVMWriteCoverageRegionMapping(unsigned int *fileIdMapping, size_t fileIdMappingSize,
+                                           struct Region **mappingRegions, size_t mappingRegionsSize,
+                                           LLVMCounterExpressionBuilderHandler counterExpressionBuilderHandler);
 
 LLVMValueRef LLVMCoverageEmit(
         LLVMContextRef context, LLVMModuleRef moduleRef,
-        LLVMValueRef* records, size_t recordsSize,
-        const char** filenames, int* fileIds, size_t filenamesSize,
-        const char** covMappings, size_t covMappingsSize);
+        LLVMValueRef *records, size_t recordsSize,
+        const char **filenames, int *fileIds, size_t filenamesSize,
+        const char **covMappings, size_t covMappingsSize);
 
 void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef moduleRef,
-                                        LLVMValueRef * functionNames, size_t functionNamesSize);
+                                        LLVMValueRef *functionNames, size_t functionNamesSize);
 
 LLVMValueRef LLVMInstrProfIncrement(LLVMModuleRef moduleRef);
 
-const char* LLVMGetPGOFunctionName(LLVMValueRef llvmFunction);
-
-LLVMValueRef LLVMCreatePGOFunctionNameVar(LLVMValueRef llvmFunction, const char* pgoFunctionName);
+LLVMValueRef LLVMCreatePGOFunctionNameVar(LLVMValueRef llvmFunction, const char *pgoFunctionName);
 
 # ifdef __cplusplus
 }

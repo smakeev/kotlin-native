@@ -13,6 +13,9 @@ import org.jetbrains.kotlin.backend.konan.*
 import org.jetbrains.kotlin.backend.konan.descriptors.*
 import org.jetbrains.kotlin.backend.konan.ir.*
 import org.jetbrains.kotlin.backend.konan.irasdescriptors.*
+import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMCoverageInstrumenter
+import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMCoverageRegionCollector
+import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMFileRegionInfo
 import org.jetbrains.kotlin.backend.konan.objcexport.ObjCExport
 import org.jetbrains.kotlin.backend.konan.optimizations.*
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
@@ -307,8 +310,13 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     }
 
     //-------------------------------------------------------------------------//
+
+    lateinit var filesRegionsInfo: List<LLVMFileRegionInfo>
+
     override fun visitModuleFragment(declaration: IrModuleFragment) {
         context.log{"visitModule                    : ${ir2string(declaration)}"}
+
+        filesRegionsInfo = LLVMCoverageRegionCollector().collectFunctionRegions(declaration)
 
         initializeCachedBoxes(context)
 
@@ -621,6 +629,9 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
         var llvmFunction: LLVMValueRef? = declaration?.let{
             codegen.llvmFunction(it)
         }
+
+        val regions = filesRegionsInfo.first { it.functions.map { it.function }.contains(declaration) }.functions.first { it.function == declaration }
+        val coverageInstrumenter = LLVMCoverageInstrumenter(context, regions) { function, args -> functionGenerationContext.call(function, args) }
 
         private var name:String? = declaration?.name?.asString()
 
@@ -1086,6 +1097,7 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     }
 
     private fun evaluateWhen(expression: IrWhen): LLVMValueRef {
+        (currentCodeContext.functionScope() as FunctionScope).coverageInstrumenter.instrumentIrElement(expression)
         context.log{"evaluateWhen                   : ${ir2string(expression)}"}
 
         val whenEmittingContext = WhenEmittingContext(expression)

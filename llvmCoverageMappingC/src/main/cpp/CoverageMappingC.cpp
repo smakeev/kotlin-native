@@ -37,18 +37,25 @@
 using namespace llvm;
 using namespace llvm::coverage;
 
+static llvm::coverage::CounterExpressionBuilder* get(LLVMCounterExpressionBuilderHandler handler) {
+    return (llvm::coverage::CounterExpressionBuilder*) handler.ptr;
+}
+
 const char *LLVMWriteCoverageRegionMapping(unsigned int *fileIdMapping, size_t fileIdMappingSize,
-                                           struct Region **mappingRegions, size_t mappingRegionsSize) {
+                                           struct Region **mappingRegions, size_t mappingRegionsSize,
+                                           LLVMCounterExpressionBuilderHandler counterExpressionBuilderHandler) {
 
     std::vector<coverage::CounterMappingRegion> mrv;
     for (size_t i = 0; i < mappingRegionsSize; ++i) {
         auto codeRegion = coverage::CounterMappingRegion::RegionKind::CodeRegion;
         struct Region region = *mappingRegions[i];
-        coverage::CounterMappingRegion counterMappingRegion(coverage::Counter(), region.fileId, 0, region.lineStart, region.columnStart, region.lineEnd, region.columnEnd, codeRegion);
+        coverage::CounterMappingRegion counterMappingRegion(coverage::Counter::getCounter(region.counterId), region.fileId, 0, region.lineStart,
+                                                            region.columnStart, region.lineEnd, region.columnEnd,
+                                                            codeRegion);
         mrv.emplace_back(counterMappingRegion);
     }
     MutableArrayRef<llvm::coverage::CounterMappingRegion> mra(mrv);
-    CoverageMappingWriter writer(ArrayRef<unsigned int>(fileIdMapping, fileIdMappingSize), None, mra);
+    CoverageMappingWriter writer(ArrayRef<unsigned int>(fileIdMapping, fileIdMappingSize), get(counterExpressionBuilderHandler)->getExpressions(), mra);
     std::string CoverageMapping;
     raw_string_ostream OS(CoverageMapping);
     writer.write(OS);
@@ -222,13 +229,20 @@ LLVMValueRef LLVMInstrProfIncrement(LLVMModuleRef moduleRef) {
     return wrap(Intrinsic::getDeclaration(&module, Intrinsic::instrprof_increment, None));
 }
 
-const char *LLVMGetPGOFunctionName(LLVMValueRef llvmFunction) {
-    auto *fnPtr = cast<Function>(unwrap(llvmFunction));
-    return getPGOFuncName(*fnPtr).c_str();
-}
-
 LLVMValueRef LLVMCreatePGOFunctionNameVar(LLVMValueRef llvmFunction, const char *pgoFunctionName) {
     auto *fnPtr = cast<llvm::Function>(unwrap(llvmFunction));
     return wrap(createPGOFuncNameVar(*fnPtr, pgoFunctionName));
+}
+
+LLVMCounterExpressionBuilderHandler LLVMCreateCounterExpressionBuilder() {
+    return LLVMCounterExpressionBuilderHandler{.ptr = new CounterExpressionBuilder()};
+}
+
+void LLVMDisposeCounterExpressionBuilder(LLVMCounterExpressionBuilderHandler handler) {
+    delete handler.ptr;
+}
+
+void LLVMBuilderAddCounters(LLVMCounterExpressionBuilderHandler handler, int firstCounterId, int secondCounterId) {
+    get(handler)->add(Counter::getCounter(firstCounterId), Counter::getCounter(secondCounterId));
 }
 

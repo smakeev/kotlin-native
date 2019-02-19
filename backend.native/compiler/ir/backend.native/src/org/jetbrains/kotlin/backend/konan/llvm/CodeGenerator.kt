@@ -160,10 +160,6 @@ internal class FunctionGenerationContext(val function: LLVMValueRef,
 
 
     override val context = codegen.context
-    private val irToCoverageRegionMapper = if (irFunction != null && context.shouldEmitCoverage())
-        IrToCoverageRegionMapper(context, context.llvmModule!!, irFunction) { fn, args -> this.call(fn, args) }
-    else
-        null
     val vars = VariableManager(this)
     private val basicBlockToLastLocation = mutableMapOf<LLVMBasicBlockRef, LocationInfo>()
 
@@ -834,9 +830,6 @@ internal class FunctionGenerationContext(val function: LLVMValueRef,
         // Is removed by DCE trivially, if not needed.
         arenaSlot = intToPtr(
                 or(ptrToInt(slotsPhi, codegen.intPtrType), codegen.immOneIntPtrType), kObjHeaderPtrPtr)
-        if (irToCoverageRegionMapper != null) {
-            irToCoverageRegionMapper.placeRegionIncrement(0)
-        }
         positionAtEnd(entryBb)
 
     }

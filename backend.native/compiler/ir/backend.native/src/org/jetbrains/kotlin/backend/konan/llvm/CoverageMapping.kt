@@ -20,11 +20,9 @@ internal data class SourceMappingRegion(
         val startLine: Int,
         val startColumn: Int,
         val endLine: Int,
-        val endColumn: Int
-) {
-    override fun toString(): String =
-            "$startLine:$startColumn - $endLine:$endColumn"
-}
+        val endColumn: Int,
+        val counterId: Int
+)
 
 internal class FunctionMapping(
         val fileIds: IntArray,
@@ -53,6 +51,7 @@ internal class CoverageMappingsBuilder {
             fileIdMapping += file
         }
         toCover.getValue(file).add(irFunction)
+
     }
 
     fun build(): CoverageMappings {
@@ -71,53 +70,51 @@ internal class CoverageMappingsBuilder {
 
     private fun collectFunctionRegions(file: IrFile, irFunction: IrFunction): List<SourceMappingRegion> =
             irFunction.body?.let { body ->
-                val coverageVisitor = CoverageVisitor(file, fileIdMapping.indexOf(file))
+                val coverageVisitor = CoverageVisitor(file, fileIdMapping.indexOf(file), FunctionCoverageBuilder(file, irFunction))
                 body.acceptVoid(coverageVisitor)
                 coverageVisitor.regionStack
             } ?: emptyList()
+}
 
-    // TODO: #coverage extend to other IrElements
-    // TODO: #coverage What if we meet nested function?
-    private class CoverageVisitor(val file: IrFile, val fileId: Int) : IrElementVisitorVoidWithContext() {
-
-        val regionStack = mutableListOf<SourceMappingRegion>()
-
-        override fun visitElement(element: IrElement) {
-            element.acceptChildrenVoid(this)
-        }
-
-        override fun visitBody(body: IrBody) {
-
-            regionStack.push(SourceMappingRegion(
-                    fileId,
-                    file.fileEntry.line(body.startOffset),
-                    file.fileEntry.column(body.startOffset),
-                    file.fileEntry.line(body.endOffset),
-                    file.fileEntry.column(body.endOffset)
-            ))
-        }
+internal class FunctionCoverageBuilder(val irFile: IrFile, val irFunction: IrFunction) {
+    val enumeration: Map<IrElement, Int> = with(CoverageRegionIrEnumerator()) {
+        visitElement(irFunction)
+        irEnumeration
     }
 }
 
-internal class IrToCoverageRegionMapper(
-        override val context: Context,
-        val module: LLVMModuleRef,
-        function: IrFunction,
-        val callSitePlacer: (function: LLVMValueRef, args: List<LLVMValueRef>) -> Unit) : ContextUtils {
+private class CoverageRegionIrEnumerator : IrElementVisitorVoidWithContext() {
 
-    private val funcGlobal = getOrPutFunctionName(function)
-    private val hash = Int64(function.symbolName.localHash.value).llvm
+    val irEnumeration = mutableMapOf<IrElement, Int>()
 
-    fun placeRegionIncrement(region: Int) {
-        val numberOfRegions = Int32(1).llvm
-        val region = Int32(region).llvm
-        callSitePlacer(LLVMInstrProfIncrement(module)!!, listOf(funcGlobal, hash, numberOfRegions, region))
+    private var counter = 0
+
+    override fun visitElement(element: IrElement) {
+        irEnumeration[element] = counter++
+        element.acceptChildrenVoid(this)
+    }
+}
+
+// TODO: #coverage extend to other IrElements
+// TODO: #coverage What if we meet nested function?
+private class CoverageVisitor(val file: IrFile, val fileId: Int, val functionCoverageBuilder: FunctionCoverageBuilder) : IrElementVisitorVoidWithContext() {
+
+    val regionStack = mutableListOf<SourceMappingRegion>()
+
+    override fun visitElement(element: IrElement) {
+        element.acceptChildrenVoid(this)
     }
 
-    private fun getOrPutFunctionName(function: IrFunction): LLVMValueRef {
-        val name = function.symbolName
-        val x = LLVMCreatePGOFunctionNameVar(function.llvmFunction, name)!!
-        return LLVMConstBitCast(x, int8TypePtr)!!
+    override fun visitBody(body: IrBody) {
+
+        regionStack.push(SourceMappingRegion(
+                fileId,
+                file.fileEntry.line(body.startOffset),
+                file.fileEntry.column(body.startOffset),
+                file.fileEntry.line(body.endOffset),
+                file.fileEntry.column(body.endOffset),
+                functionCoverageBuilder.enumeration.getValue(body)
+        ))
     }
 }
 
@@ -142,7 +139,7 @@ internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappin
             LLVMCoverageEmit(LLVMGetModuleContext(module), module,
                     functionRecords.toCValues(), functionRecords.size.signExtend(),
                     filenames.toCStringArray(this), fileIds.toCValues(), fileIds.size.signExtend(),
-                    this@LLVMCoverageMappingsWriter.covMaps.toCStringArray(this), this@LLVMCoverageMappingsWriter.covMaps.size.signExtend()
+                    covMaps.toCStringArray(this), covMaps.size.signExtend()
             )!!
         }
         context.llvm.usedGlobals.add(coverageGlobal)
@@ -150,21 +147,45 @@ internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappin
 
     private fun addFunctionMappingRecord(functionMapping: FunctionMapping): LLVMValueRef {
         return memScoped {
+            val counterExpressionBuilder = LLVMCreateCounterExpressionBuilder()
             val regions = functionMapping.regions.map { region ->
+                LLVMBuilderAddCounters(counterExpressionBuilder, region.counterId, region.counterId)
                 alloc<Region>().apply {
                     fileId = region.fileId
                     lineStart = region.startLine
                     columnStart = region.startColumn
                     lineEnd = region.endLine
                     columnEnd = region.endColumn
+                    counterId = region.counterId
                 }.ptr
             }
             val fileIds = functionMapping.fileIds.toCValues()
-            val coverageMapping = LLVMWriteCoverageRegionMapping(fileIds, fileIds.size.signExtend(), regions.toCValues(), regions.size.signExtend())!!.toKString()
+            val coverageMapping = LLVMWriteCoverageRegionMapping(fileIds, fileIds.size.signExtend(), regions.toCValues(), regions.size.signExtend(), counterExpressionBuilder)!!.toKString()
             covMaps += coverageMapping
             LLVMAddFunctionMappingRecord(LLVMGetModuleContext(context.llvmModule), functionMapping.function, functionMapping.hash, coverageMapping)!!
         }
     }
+}
 
+internal class IrToCoverageRegionMapper(
+        override val context: Context,
+        val module: LLVMModuleRef,
+        function: IrFunction,
+        val callSitePlacer: (function: LLVMValueRef, args: List<LLVMValueRef>) -> Unit) : ContextUtils {
+
+    private val funcGlobal = getOrPutFunctionName(function)
+    private val hash = Int64(function.symbolName.localHash.value).llvm
+
+    fun placeRegionIncrement(region: Int) {
+        val numberOfRegions = Int32(1).llvm
+        val region = Int32(region).llvm
+        callSitePlacer(LLVMInstrProfIncrement(module)!!, listOf(funcGlobal, hash, numberOfRegions, region))
+    }
+
+    private fun getOrPutFunctionName(function: IrFunction): LLVMValueRef {
+        val name = function.symbolName
+        val x = LLVMCreatePGOFunctionNameVar(function.llvmFunction, name)!!
+        return LLVMConstBitCast(x, int8TypePtr)!!
+    }
 }
 
