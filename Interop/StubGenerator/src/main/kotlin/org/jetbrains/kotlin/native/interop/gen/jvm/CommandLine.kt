@@ -66,10 +66,8 @@ class CInteropArguments : CommonInteropArguments() {
     @Argument(value = HEADER_FILTER_ADDITIONAL_SEARCH_PREFIX, shortName = "-hfasp",  valueDescription = "<file>", description = "header file to produce kotlin bindings for") 
     var headerFilterPrefix: Array<String> = arrayOf()
 
-    @Argument(value = "-compilerOpts", shortName = "-copt", valueDescription = "<arg>", description = "additional compiler options", delimiter = ARGUMENT_NO_DELIMITER)
-    var compilerOptsInternal: Array<String> = arrayOf()
-
-    val compilerOpts: Array<String> by parseCommandLineString { compilerOptsInternal }
+    @Argument(value = "-compilerOpts", shortName = "-copt", valueDescription = "<arg>", description = "additional compiler options", delimiter = " ")
+    var compilerOpts: Array<String> = arrayOf()
 
     @Argument(value = "-linkerOpts", shortName = "-lopt", valueDescription = "<arg>", description = "additional linker options", delimiter = ARGUMENT_NO_DELIMITER)
     var linkerOptsInternal: Array<String> = arrayOf()

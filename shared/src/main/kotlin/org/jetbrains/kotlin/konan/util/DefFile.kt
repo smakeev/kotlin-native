@@ -29,7 +29,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
     }
     class DefFileConfig(private val properties: Properties) {
         val headers by lazy {
-            properties.getParsedCommandLineString("headers")
+            properties.getSpaceSeparated("headers")
         }
 
         val modules by lazy {
@@ -41,7 +41,7 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val compilerOpts by lazy {
-            properties.getParsedCommandLineString("compilerOpts")
+            properties.getSpaceSeparated("compilerOpts")
         }
 
         val excludeSystemLibs by lazy {
@@ -73,11 +73,11 @@ class DefFile(val file:File?, val config:DefFileConfig, val manifestAddendProper
         }
 
         val staticLibraries by lazy {
-            properties.getParsedCommandLineString("staticLibraries")
+            properties.getSpaceSeparated("staticLibraries")
         }
 
         val libraryPaths by lazy {
-            properties.getParsedCommandLineString("libraryPaths")
+            properties.getSpaceSeparated("libraryPaths")
         }
 
         val packageName by lazy {
