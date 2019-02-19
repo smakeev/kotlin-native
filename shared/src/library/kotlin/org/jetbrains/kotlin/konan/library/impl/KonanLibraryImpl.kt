@@ -52,7 +52,6 @@ class KonanLibraryImpl(
         get() = manifestProperties.readKonanLibraryVersioning()
 
     override val linkerOpts: List<String>
-        //TODO: use safe representation of List<String> and avoid re-parsing
         get() = manifestProperties.getParsedCommandLineString(KLIB_PROPERTY_LINKED_OPTS)
 
     override val bitcodePaths: List<String>
