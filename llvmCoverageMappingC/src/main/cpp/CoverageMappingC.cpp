@@ -168,20 +168,8 @@ static llvm::GlobalVariable *emitCoverageGlobal(
             module, CovDataTy, true, llvm::GlobalValue::InternalLinkage,
             CovDataVal, llvm::getCoverageMappingVarName());
 
+    
     return CovData;
-
-//
-//    // Create the deferred function records array
-//    if (!FunctionNames.empty()) {
-//        auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx),
-//                                               FunctionNames.size());
-//        auto NamesArrVal = llvm::ConstantArray::get(NamesArrTy, FunctionNames);
-//        // This variable will *NOT* be emitted to the object file. It is used
-//        // to pass the list of names referenced to codegen.
-//        new llvm::GlobalVariable(module, NamesArrTy, true,
-//                                 llvm::GlobalValue::InternalLinkage, NamesArrVal,
-//                                 llvm::getCoverageUnusedNamesVarName());
-//    }
 }
 
 const char* LLVMCoverageGetCoverageSection(LLVMModuleRef moduleRef) {
@@ -216,14 +204,20 @@ LLVMValueRef LLVMCoverageEmit(
     }
     llvm::StructType *FunctionRecordTy = getFunctionRecordTy(Ctx);
     std::string RawCoverageMappings = llvm::join(CoverageMappings.begin(), CoverageMappings.end(), "");
-    return llvm::wrap(emitCoverageGlobal(
-            Ctx,
-            module,
-            FunctionRecords,
-            FileEntries,
-            RawCoverageMappings,
-            FunctionRecordTy
-    ));
+    GlobalVariable *coverageGlobal = emitCoverageGlobal(
+                Ctx,
+                module,
+                FunctionRecords,
+                FileEntries,
+                RawCoverageMappings,
+                FunctionRecordTy
+        );
+    const std::string &section = llvm::getInstrProfSectionName(
+                llvm::IPSK_covmap,
+                Triple(module.getTargetTriple()).getObjectFormat());
+    coverageGlobal->setSection(section);
+    coverageGlobal->setAlignment(8);
+    return llvm::wrap(coverageGlobal);
 }
 
 void LLVMCoverageAddFunctionNamesGlobal(LLVMContextRef context, LLVMModuleRef moduleRef,

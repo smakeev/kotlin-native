@@ -61,7 +61,7 @@ internal class CoverageMappingsBuilder {
                     val regions = collectFunctionRegions(file, function)
                     // TODO: use global hash instead
                     // TODO: Ids of the inline functions
-                    FunctionMapping(IntArray(fileIdMapping.indexOf(file)), file.name, function.functionName, regions, function.name.localHash.value)
+                    FunctionMapping(IntArray(fileIdMapping.indexOf(file)), file.name, function.symbolName, regions, function.symbolName.localHash.value)
                 }
                 .filter { it.regions.isEmpty() }
                 .let {
@@ -107,24 +107,16 @@ internal class IrToCoverageRegionMapper (
 {
 
     private val funcGlobal = getOrPutFunctionName(function)
-    private val hash = Int64(function.name.localHash.value).llvm
-
-    val map = mutableMapOf<IrElement, Int>()
-
-    fun placeRegionIncrement(irElement: IrElement) {
-        val numberOfRegions = Int32(2).llvm
-        val region = Int32(1).llvm
-        callSitePlacer(LLVMInstrProfIncrement(module)!!, listOf(funcGlobal, hash, numberOfRegions, region))
-    }
+    private val hash = Int64(function.symbolName.localHash.value).llvm
 
     fun placeRegionIncrement(region: Int) {
-        val numberOfRegions = Int32(2).llvm
+        val numberOfRegions = Int32(1).llvm
         val region = Int32(region).llvm
         callSitePlacer(LLVMInstrProfIncrement(module)!!, listOf(funcGlobal, hash, numberOfRegions, region))
     }
 
     private fun getOrPutFunctionName(function: IrFunction): LLVMValueRef {
-        val name = LLVMGetPGOFunctionName(function.llvmFunction)!!.toKString()
+        val name = function.symbolName
         val x = LLVMCreatePGOFunctionNameVar(function.llvmFunction, name)!!
         return LLVMConstBitCast(x, int8TypePtr)!!
     }
@@ -165,9 +157,6 @@ internal class LLVMCoverageMappingsWriter(val context: Context) : CoverageMappin
                     zzz.toCStringArray(this), zzz.size.signExtend()
             )!!
         }
-        val section = LLVMCoverageGetCoverageSection(module)!!.toKString()
-        LLVMSetSection(coverageGlobal, section)
-        LLVMSetAlignment(coverageGlobal, 8)
         context.llvm.usedGlobals.add(coverageGlobal)
     }
 
