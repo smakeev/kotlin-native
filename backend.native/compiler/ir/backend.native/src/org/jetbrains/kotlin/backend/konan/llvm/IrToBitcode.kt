@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.backend.konan.ir.*
 import org.jetbrains.kotlin.backend.konan.irasdescriptors.*
 import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMCoverageInstrumenter
 import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMCoverageRegionCollector
+import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMCoverageWriter
 import org.jetbrains.kotlin.backend.konan.llvm.coverage.LLVMFileRegionInfo
 import org.jetbrains.kotlin.backend.konan.objcexport.ObjCExport
 import org.jetbrains.kotlin.backend.konan.optimizations.*
@@ -320,14 +321,6 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
 
         initializeCachedBoxes(context)
 
-        if (context.shouldEmitCoverage()) {
-            declaration.files.forEach {  collectFunctionRegions(it) }
-
-            val coverageMappings = context.coverageMappingsBuilder.build()
-
-            LLVMCoverageMappingsWriter(context).write(coverageMappings)
-        }
-
         declaration.acceptChildrenVoid(this)
 
         // Note: it is here because it also generates some bitcode.
@@ -336,7 +329,7 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
         codegen.objCDataGenerator?.finishModule()
 
         BitcodeEmbedding.processModule(context.llvm)
-
+        appendCoverageInformation()
         appendDebugSelector()
         appendLlvmUsed("llvm.used", context.llvm.usedFunctions + context.llvm.usedGlobals)
         appendLlvmUsed("llvm.compiler.used", context.llvm.compilerUsedGlobals)
@@ -345,6 +338,10 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
         if (context.isNativeLibrary) {
             appendCAdapters()
         }
+    }
+
+    private fun appendCoverageInformation() {
+        LLVMCoverageWriter(context, filesRegionsInfo).write()
     }
 
     private fun collectFunctionRegions(irFile: IrFile) {
@@ -630,7 +627,8 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
             codegen.llvmFunction(it)
         }
 
-        val regions = filesRegionsInfo.first { it.functions.map { it.function }.contains(declaration) }.functions.first { it.function == declaration }
+        val regions = filesRegionsInfo.flatMap { it.functions }.first { it.function == declaration }
+
         val coverageInstrumenter = LLVMCoverageInstrumenter(context, regions) { function, args -> functionGenerationContext.call(function, args) }
 
         private var name:String? = declaration?.name?.asString()
@@ -704,6 +702,7 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
                 val parameterScope = ParameterScope(declaration, functionGenerationContext)
                 using(parameterScope) {
                     using(VariableScope()) {
+                        profile(body)
                         when (body) {
                             is IrBlockBody -> body.statements.forEach { generateStatement(it) }
                             is IrExpressionBody -> generateStatement(body.expression)
@@ -784,10 +783,15 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
         }
     }
 
+    private fun profile(irElement: IrElement) {
+        (currentCodeContext.functionScope() as? FunctionScope)?.coverageInstrumenter?.instrumentIrElement(irElement)
+    }
+
     //-------------------------------------------------------------------------//
 
     private fun evaluateExpression(value: IrExpression): LLVMValueRef {
         updateBuilderDebugLocation(value)
+        profile(value)
         when (value) {
             is IrTypeOperatorCall    -> return evaluateTypeOperator           (value)
             is IrCall                -> return evaluateCall                   (value)
@@ -1097,7 +1101,6 @@ internal class CodeGeneratorVisitor(val context: Context, val lifetimes: Map<IrE
     }
 
     private fun evaluateWhen(expression: IrWhen): LLVMValueRef {
-        (currentCodeContext.functionScope() as FunctionScope).coverageInstrumenter.instrumentIrElement(expression)
         context.log{"evaluateWhen                   : ${ir2string(expression)}"}
 
         val whenEmittingContext = WhenEmittingContext(expression)

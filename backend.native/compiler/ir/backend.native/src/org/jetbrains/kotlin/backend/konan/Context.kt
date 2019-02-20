@@ -332,8 +332,6 @@ internal class Context(config: KonanConfig) : KonanBackendContext(config) {
     lateinit var bitcodeFileName: String
     lateinit var library: KonanLibraryWriter
 
-    val coverageMappingsBuilder = CoverageMappingsBuilder()
-
     val cStubsManager = CStubsManager()
 
     lateinit var privateFunctions: List<Pair<IrFunction, DataFlowIR.FunctionSymbol.Declared>>
