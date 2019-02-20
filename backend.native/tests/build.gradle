@@ -2036,6 +2036,12 @@ task extend_exception(type: RunKonanTest) {
     source = "runtime/exceptions/extend0.kt"
 }
 
+task check_stacktrace_format(type: RunStandaloneKonanTest) {
+    disabled = !isAppleTarget(project)
+    flags = ['-g']
+    source = "runtime/exceptions/check_stacktrace_format.kt"
+}
+
 task custom_hook(type: RunStandaloneKonanTest) {
     disabled = (project.testTarget == 'wasm32') // Uses exceptions.
     goldValue = "value 42: Error\n"
@@ -2204,42 +2210,8 @@ task spread_operator_0(type: RunKonanTest) {
     source = "codegen/basics/spread_operator_0.kt"
 }
 
-// Checks that on Apple targets first two lines of exception stacktrace of symbolized executable looks like 
-// "\tat 1   main.kexe\t\t 0x000000010d7cdb4c kfun:package.function(kotlin.Int) + 108 (/path/to/file/name.kt:10:27)\n"
-// If test is broken, org.jetbrains.kotlin.idea.filters.KotlinExceptionFilter (in main Kotlin repo) should be updated.
-task main_exception(type: RunStandaloneKonanTest) {
-    def commonChecker = { s -> s.contains("kotlin.Error: Hello!") }
-    if (isAppleTarget(project)) {
-        flags = ['-g']
-        outputChecker = { s ->
-            for (trimmed in s.split('\n').collect {it.trim()}) { 
-                if (!trimmed.startsWith("at 0 ") && !trimmed.startsWith("at 1 ")) {
-                    continue
-                }
-                
-                if (!trimmed.endsWith(')') || trimmed.indexOf('(') == -1) {
-                    return false
-                }
-                
-                def fileName = trimmed.substring(trimmed.lastIndexOf('(') + 1, trimmed.length() - 1)
-                def extension = '.kt:'
-                
-                if (fileName.indexOf(extension) == -1) {
-                    return false
-                }
-                
-                def location = fileName.substring(fileName.indexOf(extension) + extension.length())
-                if (!(location ==~ /\d+:\d+/)) {
-                    return false
-                }
-            }
-            
-            return commonChecker(s)
-        }
-    } else {
-        outputChecker = commonChecker
-    }
-        
+task main_exception(type: RunKonanTest) {
+    outputChecker = { s -> s.contains("kotlin.Error: Hello!") }
     expectedExitStatus = 1
     source = "runtime/basic/main_exception.kt"
 }
