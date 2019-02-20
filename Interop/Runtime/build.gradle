@@ -42,6 +42,7 @@ model {
 
                 def hostLibffiDir = rootProject.ext.get("${host}LibffiDir")
 
+                cCompiler.args.remove("-nostdinc")
                 cCompiler.args hostPlatform.clang.hostCompilerArgsForJni
                 cCompiler.args "-I$hostLibffiDir/include"
 
